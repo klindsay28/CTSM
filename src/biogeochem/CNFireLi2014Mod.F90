@@ -545,11 +545,12 @@ contains
      ! When the simulation has run fewer than this number of steps,
      ! re-scale the e-folding time to get a stable early estimate.
 
-     ! find which pool is the cwd pool
+     ! find first pool which is the cwd pool
      i_cwd = 0
      do l = 1, ndecomp_pools
         if ( is_cwd(l) ) then
            i_cwd = l
+           exit
         endif
      end do
 
@@ -657,7 +658,7 @@ contains
    !
    ! !ARGUMENTS:
    class(cnfire_li2014_type)                      :: this
-   type(bounds_type)                    , intent(in)    :: bounds  
+   type(bounds_type)                    , intent(in)    :: bounds
    integer                              , intent(in)    :: num_soilc       ! number of soil columns in filter
    integer                              , intent(in)    :: filter_soilc(:) ! filter for soil columns
    integer                              , intent(in)    :: num_soilp       ! number of soil patches in filter
@@ -922,8 +923,8 @@ contains
         ! biomass burning
         ! carbon fluxes
         m = spinup_factor_deadwood
- 
-        ! For patches with active fire add to active fire filter 
+
+        ! For patches with active fire add to active fire filter
         if(f /= 0)then
            num_actfirep = num_actfirep + 1
            filter_actfirep(num_actfirep) = p

@@ -15,7 +15,7 @@ module SoilBiogeochemNStateUpdate1Mod
   use SoilBiogeochemNitrogenfluxType     , only : soilbiogeochem_nitrogenflux_type
   use SoilBiogeochemDecompCascadeConType , only : decomp_cascade_con, use_soil_matrixcn
   use CNSharedParamsMod                  , only : use_fun
-  use ColumnType                         , only : col 
+  use ColumnType                         , only : col
   !
   implicit none
   private
@@ -48,9 +48,10 @@ contains
 
     !-----------------------------------------------------------------------
 
-    associate(                                                                   & 
+    associate(                                                                   &
          cascade_donor_pool    => decomp_cascade_con%cascade_donor_pool        , & ! Input:  [integer  (:)     ]  which pool is C taken from for a given decomposition step
          cascade_receiver_pool => decomp_cascade_con%cascade_receiver_pool     , & ! Input:  [integer  (:)     ]  which pool is C added to for a given decomposition step
+         is_shadow             => decomp_cascade_con%is_shadow                 , & ! Input:  [logical  (:)     ]  TRUE => pool is a shadow pool
 
          ndep_prof             => soilbiogeochem_state_inst%ndep_prof_col      , & ! Input:  [real(r8) (:,:)   ]  profile over which N deposition is distributed through column (1/m)
          nfixation_prof        => soilbiogeochem_state_inst%nfixation_prof_col , & ! Input:  [real(r8) (:,:)   ]  profile over which N fixation is distributed through column (1/m)
@@ -65,7 +66,7 @@ contains
       do j = 1, nlevdecomp
          do fc = 1,num_soilc
             c = filter_soilc(fc)
-            if(use_fun)then !RF in FUN logic, the fixed N goes straight into the plant, and not into the SMINN pool. 
+            if(use_fun)then !RF in FUN logic, the fixed N goes straight into the plant, and not into the SMINN pool.
  	               ! N deposition and fixation (put all into NH4 pool)
 	               ns%smin_nh4_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) + nf%ndep_to_sminn_col(c)*dt * ndep_prof(c,j)
 	               ns%smin_nh4_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) + nf%ffix_to_sminn_col(c)*dt * nfixation_prof(c,j)
@@ -81,12 +82,12 @@ contains
 	               ! N deposition and fixation (put all into NH4 pool)
 	               ns%smin_nh4_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) + nf%ndep_to_sminn_col(c)*dt * ndep_prof(c,j)
 	               ns%smin_nh4_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) + nf%nfix_to_sminn_col(c)*dt * nfixation_prof(c,j)
-                       
+
                 end if
            end if
-          
+
          end do
-         
+
       end do
 
       ! repeating N dep and fixation for crops
@@ -160,7 +161,7 @@ contains
          end do
       else
          ! Matrix solution equvalent to above is in CNSoilMatrixMod.F90? (TODO check on this)
-      end if  ! 
+      end if  !
 
       if (.not. use_nitrif_denitrif) then
 
@@ -169,7 +170,9 @@ contains
          !--------------------------------------------------------
 
          ! immobilization/mineralization in litter-to-SOM and SOM-to-SOM fluxes and denitrification fluxes
+         ! disregard transitions between shadow pools
          do k = 1, ndecomp_cascade_transitions
+            if (is_shadow(cascade_donor_pool(k))) cycle
             if ( cascade_receiver_pool(k) /= 0 ) then  ! skip terminal transitions
                do j = 1, nlevdecomp
                   ! column loop
@@ -214,7 +217,7 @@ contains
             end do
          end do
 
-      else   
+      else
 
          !--------------------------------------------------------
          !-------------    NITRIF_DENITRIF ON --------------------
@@ -238,12 +241,12 @@ contains
                   ns%smin_nh4_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) - nf%smin_nh4_to_plant_vr_col(c,j)*dt
 
                   ns%smin_no3_vr_col(c,j) = ns%smin_no3_vr_col(c,j) - nf%smin_no3_to_plant_vr_col(c,j)*dt
-               else 
+               else
                   ns%smin_nh4_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) -  nf%sminn_to_plant_fun_nh4_vr_col(c,j)*dt
 
                   ns%smin_no3_vr_col(c,j) = ns%smin_no3_vr_col(c,j) -  nf%sminn_to_plant_fun_no3_vr_col(c,j)*dt
                end if
-             
+
 
                ! Account for nitrification fluxes
                ns%smin_nh4_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) - nf%f_nit_vr_col(c,j) * dt
@@ -259,10 +262,10 @@ contains
 
                ! update diagnostic total
                ns%sminn_vr_col(c,j) = ns%smin_nh4_vr_col(c,j) + ns%smin_no3_vr_col(c,j)
-               
+
             end do ! end of column loop
          end do
-              
+
       end if
 
     end associate

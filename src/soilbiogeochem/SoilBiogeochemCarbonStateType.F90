@@ -10,20 +10,20 @@ module SoilBiogeochemCarbonStateType
   use clm_varctl                         , only : iulog, spinup_state, use_fates
   use landunit_varcon                    , only : istcrop, istsoil
   use abortutils                         , only : endrun
-  use spmdMod                            , only : masterproc 
+  use spmdMod                            , only : masterproc
   use SoilBiogeochemDecompCascadeConType , only : decomp_cascade_con, use_soil_matrixcn
-  use LandunitType                       , only : lun                
-  use ColumnType                         , only : col                
+  use LandunitType                       , only : lun
+  use ColumnType                         , only : col
   use GridcellType                       , only : grc
   use SoilBiogeochemStateType            , only : get_spinup_latitude_term
   use SparseMatrixMultiplyMod            , only : sparse_matrix_type, vector_type
-  ! 
+  !
   ! !PUBLIC TYPES:
   implicit none
   private
   !
   type, public :: soilbiogeochem_carbonstate_type
-     
+
      ! all c pools involved in decomposition
      real(r8), pointer :: decomp_cpools_vr_col (:,:,:) ! (gC/m3) vertically-resolved decomposing (litter, cwd, soil) c pools
      real(r8), pointer :: decomp_soilc_vr_col  (:,:)   ! (gC/m3) vertically-resolved decomposing total soil c pool
@@ -47,15 +47,15 @@ module SoilBiogeochemCarbonStateType
 
    contains
 
-     procedure , public  :: Init   
-     procedure , public  :: SetValues 
+     procedure , public  :: Init
+     procedure , public  :: SetValues
      procedure , public  :: Restart
      procedure , public  :: Summary
      procedure , public  :: SetTotVgCThresh
      procedure , public  :: DynamicColumnAdjustments  ! adjust state variables when column areas change
-     procedure , private :: InitAllocate 
-     procedure , private :: InitHistory  
-     procedure , private :: InitCold     
+     procedure , private :: InitAllocate
+     procedure , private :: InitHistory
+     procedure , private :: InitCold
 
 
   end type soilbiogeochem_carbonstate_type
@@ -70,7 +70,7 @@ contains
   subroutine Init(this, bounds, carbon_type, ratio, c12_soilbiogeochem_carbonstate_inst)
 
     class(soilbiogeochem_carbonstate_type)                       :: this
-    type(bounds_type)                     , intent(in)           :: bounds  
+    type(bounds_type)                     , intent(in)           :: bounds
     character(len=3)                      , intent(in)           :: carbon_type
     real(r8)                              , intent(in)           :: ratio
     type(soilbiogeochem_carbonstate_type) , intent(in), optional :: c12_soilbiogeochem_carbonstate_inst
@@ -81,7 +81,7 @@ contains
     if (present(c12_soilbiogeochem_carbonstate_inst)) then
        call this%InitCold  ( bounds, ratio, c12_soilbiogeochem_carbonstate_inst )
     else
-       call this%InitCold  ( bounds, ratio) 
+       call this%InitCold  ( bounds, ratio)
     end if
 
   end subroutine Init
@@ -91,7 +91,7 @@ contains
     !
     ! !ARGUMENTS:
     class (soilbiogeochem_carbonstate_type) :: this
-    type(bounds_type), intent(in) :: bounds  
+    type(bounds_type), intent(in) :: bounds
     !
     ! !LOCAL VARIABLES:
     integer           :: begc,endc
@@ -102,17 +102,17 @@ contains
     allocate( this%decomp_cpools_col    (begc :endc,1:ndecomp_pools))   ; this%decomp_cpools_col    (:,:) = nan
     allocate( this%decomp_cpools_1m_col (begc :endc,1:ndecomp_pools))   ; this%decomp_cpools_1m_col (:,:) = nan
 
-    allocate( this%ctrunc_vr_col(begc :endc,1:nlevdecomp_full)) ; 
+    allocate( this%ctrunc_vr_col(begc :endc,1:nlevdecomp_full)) ;
     this%ctrunc_vr_col        (:,:) = nan
 
-    allocate(this%decomp_cpools_vr_col(begc:endc,1:nlevdecomp_full,1:ndecomp_pools))  
+    allocate(this%decomp_cpools_vr_col(begc:endc,1:nlevdecomp_full,1:ndecomp_pools))
     this%decomp_cpools_vr_col(:,:,:)= nan
 
     ! Matrix-spinup
     if(use_soil_matrixcn)then
     end if
 
-    allocate(this%decomp_soilc_vr_col(begc:endc,1:nlevdecomp_full))  
+    allocate(this%decomp_soilc_vr_col(begc:endc,1:nlevdecomp_full))
     this%decomp_soilc_vr_col(:,:)= nan
 
     allocate(this%ctrunc_col     (begc :endc)) ; this%ctrunc_col     (:) = nan
@@ -131,14 +131,14 @@ contains
   end subroutine InitAllocate
 
   !------------------------------------------------------------------------
-  subroutine InitHistory(this, bounds, carbon_type) 
+  subroutine InitHistory(this, bounds, carbon_type)
     !
     ! !USES:
-    use histFileMod, only : hist_addfld1d, hist_addfld2d, hist_addfld_decomp 
+    use histFileMod, only : hist_addfld1d, hist_addfld2d, hist_addfld_decomp
     !
     ! !ARGUMENTS:
     class (soilbiogeochem_carbonstate_type) :: this
-    type(bounds_type) , intent(in)          :: bounds 
+    type(bounds_type) , intent(in)          :: bounds
     character(len=3)  , intent(in)          :: carbon_type
     !
     ! !LOCAL VARIABLES:
@@ -192,7 +192,7 @@ contains
                   ptr_col=data1dptr, default='inactive')
           endif
        end do
- 
+
        ! Matrix solution history fields
        if(use_soil_matrixcn)then
           do l  = 1, ndecomp_pools
@@ -203,9 +203,9 @@ contains
              end if
 
           end do
- 
+
        end if
- 
+
        this%totmicc_col(begc:endc) = spval
        call hist_addfld1d (fname='TOTMICC', units='gC/m^2', &
             avgflag='A', long_name='total microbial carbon', &
@@ -397,7 +397,7 @@ contains
             avgflag='A', long_name='C14 total soil organic matter carbon', &
             ptr_col=this%totsomc_col)
 
-       if ( nlevdecomp_full > 1 ) then       
+       if ( nlevdecomp_full > 1 ) then
           this%totlitc_1m_col(begc:endc) = spval
           call hist_addfld1d (fname='C14_TOTLITC_1m', units='gC14/m^2', &
                avgflag='A', long_name='C14 total litter carbon to 1 meter', &
@@ -433,8 +433,8 @@ contains
     ! !USES:
     !
     ! !ARGUMENTS:
-    class(soilbiogeochem_carbonstate_type) :: this 
-    type(bounds_type) , intent(in)         :: bounds  
+    class(soilbiogeochem_carbonstate_type) :: this
+    type(bounds_type) , intent(in)         :: bounds
     real(r8)          , intent(in)         :: ratio
     type(soilbiogeochem_carbonstate_type), intent(in), optional :: c12_soilbiogeochem_carbonstate_inst
     !
@@ -536,7 +536,7 @@ contains
 
     ! now loop through special filters and explicitly set the variables that
     ! have to be in place for biogeophysics
-    
+
     ! Set column filters
 
     num_special_col = 0
@@ -556,7 +556,7 @@ contains
   !-----------------------------------------------------------------------
   subroutine Restart ( this,  bounds, ncid, flag, carbon_type, totvegc_col, c12_soilbiogeochem_carbonstate_inst )
     !
-    ! !DESCRIPTION: 
+    ! !DESCRIPTION:
     ! Read/write CN restart data for carbon state
     !
     ! !USES:
@@ -569,11 +569,11 @@ contains
     !
     ! !ARGUMENTS:
     class (soilbiogeochem_carbonstate_type)                      :: this
-    type(bounds_type)                     , intent(in)           :: bounds 
+    type(bounds_type)                     , intent(in)           :: bounds
     type(file_desc_t)                     , intent(inout)        :: ncid   ! netcdf id
     character(len=*)                      , intent(in)           :: flag   !'read' or 'write'
     character(len=3)                      , intent(in)           :: carbon_type ! 'c12' or 'c13' or 'c14'
-    real(r8)                              , intent(in)           :: totvegc_col(bounds%begc:bounds%endc) ! (gC/m2) total 
+    real(r8)                              , intent(in)           :: totvegc_col(bounds%begc:bounds%endc) ! (gC/m2) total
                                                                                                          ! vegetation carbon
     type(soilbiogeochem_carbonstate_type) , intent(in), optional :: c12_soilbiogeochem_carbonstate_inst
 
@@ -731,14 +731,14 @@ contains
            this%restart_file_spinup_state = c12_soilbiogeochem_carbonstate_inst%restart_file_spinup_state
         endif
 
-        ! now compare the model and restart file spinup states, and either take the 
+        ! now compare the model and restart file spinup states, and either take the
         ! model into spinup mode or out of it if they are not identical
-        ! taking model out of spinup mode requires multiplying each decomposing pool 
+        ! taking model out of spinup mode requires multiplying each decomposing pool
         ! by the associated AD factor.
-        ! putting model into spinup mode requires dividing each decomposing pool 
+        ! putting model into spinup mode requires dividing each decomposing pool
         ! by the associated AD factor.
         ! only allow this to occur on first timestep of model run.
-        
+
         if (flag == 'read' .and. spinup_state /= this%restart_file_spinup_state ) then
            if (spinup_state == 0 .and. this%restart_file_spinup_state >= 1 ) then
               if ( masterproc ) write(iulog,*) ' CNRest: taking ',carbon_type,' SOM pools out of AD spinup mode'
@@ -771,18 +771,18 @@ contains
                     if ( abs(m - 1._r8) .gt. 0.000001_r8 .and. exit_spinup) then
                        this%decomp_cpools_vr_col(c,j,k) = this%decomp_cpools_vr_col(c,j,k) * m * &
                             get_spinup_latitude_term(grc%latdeg(col%gridcell(c)))
-                       ! If there is no vegetation carbon, implying that all vegetation has died, then 
-                       ! reset decomp pools to near zero during exit_spinup to avoid very 
-                       ! large and inert soil carbon stocks; note that only pools with spinup factor > 1 
+                       ! If there is no vegetation carbon, implying that all vegetation has died, then
+                       ! reset decomp pools to near zero during exit_spinup to avoid very
+                       ! large and inert soil carbon stocks; note that only pools with spinup factor > 1
                        ! will be affected, which means that total SOMC and LITC pools will not be set to 0.
-                       if (totvegc_col(c) <= this%totvegcthresh .and. lun%itype(l) /= istcrop) then 
+                       if (totvegc_col(c) <= this%totvegcthresh .and. lun%itype(l) /= istcrop) then
                          this%decomp_cpools_vr_col(c,j,k) = 0.0_r8
                        endif
                     elseif ( abs(m - 1._r8) .gt. 0.000001_r8 .and. enter_spinup) then
                        this%decomp_cpools_vr_col(c,j,k) = this%decomp_cpools_vr_col(c,j,k) * m / &
                             get_spinup_latitude_term(grc%latdeg(col%gridcell(c)))
                     else
-                       this%decomp_cpools_vr_col(c,j,k) = this%decomp_cpools_vr_col(c,j,k) * m 
+                       this%decomp_cpools_vr_col(c,j,k) = this%decomp_cpools_vr_col(c,j,k) * m
                     endif
                  end do
               end do
@@ -862,7 +862,7 @@ contains
           end do
        end do
     end if
-    
+
     if(use_soil_matrixcn)then
     end if
 
@@ -876,7 +876,7 @@ contains
     !
     ! !ARGUMENTS:
     class(soilbiogeochem_carbonstate_type)          :: this
-    type(bounds_type)               , intent(in)    :: bounds          
+    type(bounds_type)               , intent(in)    :: bounds
     integer                         , intent(in)    :: num_allc       ! number of columns in allc filter
     integer                         , intent(in)    :: filter_allc(:) ! filter for all active columns
     !
@@ -1057,14 +1057,14 @@ contains
           this%cwdc_col(c) = 0._r8
        end do
        do l = 1, ndecomp_pools
-          if ( decomp_cascade_con%is_cwd(l) ) then
+          if ( decomp_cascade_con%is_cwd(l) .and. .not. decomp_cascade_con%is_shadow(l) ) then
              do fc = 1,num_allc
                 c = filter_allc(fc)
                 this%cwdc_col(c) = this%cwdc_col(c) + this%decomp_cpools_col(c,l)
              end do
           end if
        end do
-       
+
     end if
 
   end subroutine Summary

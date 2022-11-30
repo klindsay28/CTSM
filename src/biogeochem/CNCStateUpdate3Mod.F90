@@ -13,11 +13,12 @@ module CNCStateUpdate3Mod
   use abortutils                     , only : endrun
   use clm_time_manager               , only : get_step_size_real
   use clm_varpar                     , only : nlevdecomp, ndecomp_pools, i_cwd, i_litr_min, i_litr_max
+  use clm_varpar                     , only : i_shadow_cwd
   use CNVegCarbonStateType           , only : cnveg_carbonstate_type
   use CNVegCarbonFluxType            , only : cnveg_carbonflux_type
   use SoilBiogeochemCarbonStateType  , only : soilbiogeochem_carbonstate_type
   use SoilBiogeochemCarbonFluxType   , only : soilbiogeochem_carbonflux_type
-  use SoilBiogeochemDecompCascadeConType , only : use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType , only : use_soil_matrixcn, use_soil_nk_shadow
   use CNSharedParamsMod              , only : use_matrixcn
   !
   implicit none
@@ -54,7 +55,7 @@ contains
     real(r8):: dt        ! radiation time step (seconds)
     !-----------------------------------------------------------------------
 
-    associate(                                      & 
+    associate(                                      &
          cf_veg => cnveg_carbonflux_inst ,          & ! Input
          cs_veg => cnveg_carbonstate_inst,          & ! Output
          cf_soil => soilbiogeochem_carbonflux_inst, & ! Output
@@ -76,6 +77,9 @@ contains
             if (.not. use_soil_matrixcn) then
                cs_soil%decomp_cpools_vr_col(c,j,i_cwd) = cs_soil%decomp_cpools_vr_col(c,j,i_cwd) + &
                  cf_veg%fire_mortality_c_to_cwdc_col(c,j) * dt
+               if (use_soil_nk_shadow) &
+                  cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) = cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) + &
+                    cf_veg%fire_mortality_c_to_cwdc_col(c,j) * dt
 
                ! patch-level wood to column-level litter (uncombusted wood)
                do i = i_litr_min, i_litr_max
@@ -128,11 +132,11 @@ contains
          cs_veg%gresp_xfer_patch(p) = cs_veg%gresp_xfer_patch(p) -                 &
               cf_veg%m_gresp_xfer_to_fire_patch(p) * dt
          cs_veg%gresp_xfer_patch(p) = cs_veg%gresp_xfer_patch(p) -                 &
-              cf_veg%m_gresp_xfer_to_litter_fire_patch(p) * dt  
+              cf_veg%m_gresp_xfer_to_litter_fire_patch(p) * dt
          !
          ! State update without the matrix solution
          !
-         if(.not. use_matrixcn)then 
+         if(.not. use_matrixcn)then
             ! displayed pools
             cs_veg%leafc_patch(p) = cs_veg%leafc_patch(p) -                           &
               cf_veg%m_leafc_to_fire_patch(p) * dt

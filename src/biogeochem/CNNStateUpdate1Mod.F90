@@ -11,9 +11,9 @@ module CNNStateUpdate1Mod
   use shr_kind_mod                    , only: r8 => shr_kind_r8
   use clm_time_manager                , only : get_step_size_real
   use clm_varpar                      , only : nlevdecomp
-  use clm_varpar                      , only : i_litr_min, i_litr_max, i_cwd
+  use clm_varpar                      , only : i_litr_min, i_litr_max, i_cwd, i_shadow_cwd
   use clm_varctl                      , only : iulog, use_nitrif_denitrif
-  use SoilBiogeochemDecompCascadeConType, only : use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType, only : use_soil_matrixcn, use_soil_nk_shadow
   use CNSharedParamsMod               , only : use_matrixcn
   use clm_varcon                      , only : nitrif_n2o_loss_frac
   use pftconMod                       , only : npcropmin, pftcon
@@ -23,7 +23,7 @@ module CNNStateUpdate1Mod
   use SoilBiogeochemNitrogenFluxType  , only : soilbiogeochem_nitrogenflux_type
   use SoilBiogeochemNitrogenStateType , only : soilbiogeochem_nitrogenstate_type
   use CropReprPoolsMod                , only : nrepr, repr_grain_min, repr_grain_max, repr_structure_min, repr_structure_max
-  use PatchType                       , only : patch                
+  use PatchType                       , only : patch
   !
   implicit none
   private
@@ -44,7 +44,7 @@ contains
     ! Update nitrogen states based on fluxes from dyn_cnbal_patch
     !
     ! !ARGUMENTS:
-    type(bounds_type), intent(in)    :: bounds      
+    type(bounds_type), intent(in)    :: bounds
     integer, intent(in) :: num_soilc_with_inactive       ! number of columns in soil filter
     integer, intent(in) :: filter_soilc_with_inactive(:) ! soil column filter that includes inactive points
     type(cnveg_nitrogenflux_type)           , intent(in)    :: cnveg_nitrogenflux_inst
@@ -82,6 +82,9 @@ contains
           end do
           ns_soil%decomp_npools_vr_col(c,j,i_cwd) = ns_soil%decomp_npools_vr_col(c,j,i_cwd) + &
                ( nf_veg%dwt_livecrootn_to_cwdn_col(c,j) + nf_veg%dwt_deadcrootn_to_cwdn_col(c,j) ) * dt
+          if (use_soil_nk_shadow) &
+             ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd) = ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd) + &
+                  ( nf_veg%dwt_livecrootn_to_cwdn_col(c,j) + nf_veg%dwt_deadcrootn_to_cwdn_col(c,j) ) * dt
        end do
     end do
 
@@ -96,7 +99,7 @@ contains
 
   !-----------------------------------------------------------------------
   subroutine NStateUpdate1(num_soilc, filter_soilc, num_soilp, filter_soilp, &
-       cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst) 
+       cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)
      use CNSharedParamsMod               , only : use_fun
     !
     ! !DESCRIPTION:
@@ -118,8 +121,8 @@ contains
     real(r8):: dt        ! radiation time step (seconds)
     !-----------------------------------------------------------------------
 
-    associate(                                                                   & 
-         ivt                   => patch%itype                                    , & ! Input:  [integer  (:)     ]  patch vegetation type                                
+    associate(                                                                   &
+         ivt                   => patch%itype                                    , & ! Input:  [integer  (:)     ]  patch vegetation type
 
          woody                 => pftcon%woody                                 , & ! Input:  binary flag for woody lifeform (1=woody, 0=not woody)
 
@@ -150,6 +153,8 @@ contains
                ! terms have been moved to CStateUpdateDynPatch. I think this is zeroed every
                ! time step, but to be safe, I'm explicitly setting it to zero here.
                nf_soil%decomp_npools_sourcesink_col(c,j,i_cwd) = 0._r8
+               if (use_soil_nk_shadow) &
+                  nf_soil%decomp_npools_sourcesink_col(c,j,i_shadow_cwd) = 0._r8
 
             !
             ! For the matrix solution the actual state update comes after the matrix
@@ -248,7 +253,7 @@ contains
             else
                ! NOTE: The equivalent changes for matrix code are in CNPhenology EBK (11/26/2019)
             end if !not use_matrixcn
-         end if 
+         end if
          if (ivt(p) >= npcropmin) then ! Beth adds retrans from froot
             !
             ! State update without the matrix solution
@@ -289,9 +294,9 @@ contains
 
          ! deployment from retranslocation pool
          ns_veg%npool_patch(p)    = ns_veg%npool_patch(p)    + nf_veg%retransn_to_npool_patch(p)*dt
-         
+
          ns_veg%npool_patch(p)    = ns_veg%npool_patch(p)    + nf_veg%free_retransn_to_npool_patch(p)*dt
-         
+
          ! allocation fluxes
          ns_veg%npool_patch(p)              = ns_veg%npool_patch(p)          - nf_veg%npool_to_leafn_patch(p)*dt
          ns_veg%npool_patch(p)              = ns_veg%npool_patch(p)          - nf_veg%npool_to_leafn_storage_patch(p)*dt
@@ -302,7 +307,7 @@ contains
          !
          if (.not. use_matrixcn) then
             ns_veg%retransn_patch(p)        = ns_veg%retransn_patch(p)       - nf_veg%retransn_to_npool_patch(p)*dt
-            ns_veg%retransn_patch(p)        = ns_veg%retransn_patch(p)       - nf_veg%free_retransn_to_npool_patch(p)*dt !how is retransn a state? 
+            ns_veg%retransn_patch(p)        = ns_veg%retransn_patch(p)       - nf_veg%free_retransn_to_npool_patch(p)*dt !how is retransn a state?
             ns_veg%leafn_patch(p)           = ns_veg%leafn_patch(p)          + nf_veg%npool_to_leafn_patch(p)*dt
             ns_veg%leafn_storage_patch(p)   = ns_veg%leafn_storage_patch(p)  + nf_veg%npool_to_leafn_storage_patch(p)*dt
             ns_veg%frootn_patch(p)          = ns_veg%frootn_patch(p)         + nf_veg%npool_to_frootn_patch(p)*dt

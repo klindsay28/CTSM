@@ -12,13 +12,13 @@
   use shr_log_mod                    , only : errMsg => shr_log_errMsg
   use abortutils                     , only : endrun
   use clm_time_manager               , only : get_step_size_real
-  use clm_varpar                     , only : i_litr_min, i_litr_max, nlevdecomp, i_cwd
+  use clm_varpar                     , only : i_litr_min, i_litr_max, nlevdecomp, i_cwd, i_shadow_cwd
   use CNvegCarbonStateType           , only : cnveg_carbonstate_type
   use CNVegCarbonFluxType            , only : cnveg_carbonflux_type
   use SoilBiogeochemCarbonStatetype  , only : soilbiogeochem_carbonstate_type
   use SoilBiogeochemCarbonFluxtype   , only : soilbiogeochem_carbonflux_type
   use CNSharedParamsMod              , only : use_matrixcn
-  use SoilBiogeochemDecompCascadeConType , only : use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType , only : use_soil_matrixcn, use_soil_nk_shadow
   !
   implicit none
   private
@@ -54,8 +54,8 @@ contains
     integer  :: fp,fc  ! lake filter indices
     real(r8) :: dt     ! radiation time step (seconds)
     !-----------------------------------------------------------------------
-    
-    associate(                                      & 
+
+    associate(                                      &
          cf_veg => cnveg_carbonflux_inst          , &
          cs_veg => cnveg_carbonstate_inst         , &
 
@@ -87,6 +87,9 @@ contains
                !           i_cwd = 0 if fates, so not including in the i-loop
                cs_soil%decomp_cpools_vr_col(c,j,i_cwd) = &
                  cs_soil%decomp_cpools_vr_col(c,j,i_cwd) + cf_veg%gap_mortality_c_to_cwdc_col(c,j) * dt
+               if (use_soil_nk_shadow) &
+                  cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) = &
+                    cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) + cf_veg%gap_mortality_c_to_cwdc_col(c,j) * dt
             !
             ! For the matrix solution the actual state update comes after the matrix
             ! multiply in SoilMatrix, but the matrix needs to be setup with
@@ -197,13 +200,13 @@ contains
     real(r8):: dt        ! radiation time step (seconds)
     !-----------------------------------------------------------------------
 
-    associate(                                     & 
+    associate(                                     &
          cf_veg => cnveg_carbonflux_inst         , &
          cs_veg => cnveg_carbonstate_inst        , &
-         cf_soil => soilbiogeochem_carbonflux_inst, & 
+         cf_soil => soilbiogeochem_carbonflux_inst, &
          cs_soil => soilbiogeochem_carbonstate_inst &
          )
-     
+
       ! set time steps
       dt = get_step_size_real()
 
@@ -227,6 +230,9 @@ contains
                !           i_cwd = 0 if fates, so not including in the i-loop
                cs_soil%decomp_cpools_vr_col(c,j,i_cwd) = &
                     cs_soil%decomp_cpools_vr_col(c,j,i_cwd) + cf_veg%harvest_c_to_cwdc_col(c,j)  * dt
+               if (use_soil_nk_shadow) &
+                  cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) = &
+                       cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) + cf_veg%harvest_c_to_cwdc_col(c,j)  * dt
             !
             ! For the matrix solution the actual state update comes after the matrix
             ! multiply in SoilMatrix, but the matrix needs to be setup with

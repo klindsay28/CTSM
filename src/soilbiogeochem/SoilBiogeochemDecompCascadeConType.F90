@@ -23,21 +23,22 @@ module SoilBiogeochemDecompCascadeConType
   public :: InitSoilTransfer                 ! Initialize soil transfer (for soil matrix)
   !
   type, public :: decomp_cascade_type
-     !-- properties of each pathway along decomposition cascade 
+     !-- properties of each pathway along decomposition cascade
      character(len=8)  , pointer :: cascade_step_name(:)               ! name of transition
      integer           , pointer :: cascade_donor_pool(:)              ! which pool is C taken from for a given decomposition step
      integer           , pointer :: cascade_receiver_pool(:)           ! which pool is C added to for a given decomposition step
 
      !-- properties of each decomposing pool
      logical           , pointer  :: floating_cn_ratio_decomp_pools(:) ! TRUE => pool has fixed C:N ratio
-     character(len=8)  , pointer  :: decomp_pool_name_restart(:)       ! name of pool for restart files
-     character(len=8)  , pointer  :: decomp_pool_name_history(:)       ! name of pool for history files
-     character(len=20) , pointer  :: decomp_pool_name_long(:)          ! name of pool for netcdf long names
+     character(len=10) , pointer  :: decomp_pool_name_restart(:)       ! name of pool for restart files
+     character(len=10) , pointer  :: decomp_pool_name_history(:)       ! name of pool for history files
+     character(len=26) , pointer  :: decomp_pool_name_long(:)          ! name of pool for netcdf long names
      character(len=8)  , pointer  :: decomp_pool_name_short(:)         ! name of pool for netcdf short names
      logical           , pointer  :: is_microbe(:)                     ! TRUE => pool is a microbe pool
      logical           , pointer  :: is_litter(:)                      ! TRUE => pool is a litter pool
      logical           , pointer  :: is_soil(:)                        ! TRUE => pool is a soil pool
      logical           , pointer  :: is_cwd(:)                         ! TRUE => pool is a cwd pool
+     logical           , pointer  :: is_shadow(:)                      ! TRUE => pool is a shadow pool
      real(r8)          , pointer  :: initial_cn_ratio(:)               ! c:n ratio for initialization of pools
      real(r8)          , pointer  :: initial_stock(:)                  ! initial concentration for seeding at spinup
      real(r8)                     :: initial_stock_soildepth           ! soil depth for initial concentration for seeding at spinup
@@ -56,6 +57,7 @@ module SoilBiogeochemDecompCascadeConType
   integer, public, parameter :: mimics_decomp = 2                      ! MIMICS decomposition method type
   integer, public            :: decomp_method  = ispval                ! Type of decomposition to use
   logical, public, parameter :: use_soil_matrixcn = .false.            ! true => use cn matrix solution for soil BGC
+  logical, public, parameter :: use_soil_nk_shadow = .true.            ! true => use nk shadow tracers for soil BGC
   type(decomp_cascade_type), public :: decomp_cascade_con
   !------------------------------------------------------------------------
 
@@ -93,9 +95,9 @@ contains
        end if
        close(nu_nml)
        select case( soil_decomp_method )
-       case( 'None' ) 
+       case( 'None' )
           decomp_method = no_soil_decomp
-       case( 'CENTURYKoven2013' ) 
+       case( 'CENTURYKoven2013' )
           decomp_method = century_decomp
        case( 'MIMICSWieder2015' )
           decomp_method = mimics_decomp
@@ -119,7 +121,16 @@ contains
           call endrun('When running without FATES or BGC soil_decomp_method must be None')
        end if
     end if
-     
+
+    if (use_soil_nk_shadow) then
+       if (.not. use_cn) then  ! note that use_cn == .true. => use_fates == .false.
+          call endrun('use_soil_nk_shadow assumes use_cn == .true.')
+       end if
+       if (decomp_method /= century_decomp) then
+          call endrun('use_soil_nk_shadow assumes decomp_method == century_decomp')
+       end if
+    end if
+
     if ( decomp_method /= no_soil_decomp )then
        ! We hardwire these parameters here because we use them
        ! in InitAllocate (in SoilBiogeochemStateType) which is called earlier than
@@ -140,6 +151,10 @@ contains
           if (decomp_method == century_decomp) then
              ndecomp_pools = 7
              ndecomp_cascade_transitions = 10
+             if (use_soil_nk_shadow) then  ! add cwd shadow
+                ndecomp_pools = ndecomp_pools + 1
+                ndecomp_cascade_transitions = ndecomp_cascade_transitions + 1
+             end if
           else if (decomp_method == mimics_decomp) then
              ndecomp_pools = 8
              ndecomp_cascade_transitions = 15
@@ -147,7 +162,7 @@ contains
        endif
        ! The next param also appears as a dimension in the params files dated
        ! c210418.nc and later
-       ndecomp_pools_max = 8  ! largest ndecomp_pools value above
+       ndecomp_pools_max = 8  ! largest ndecomp_pools value above, ignoring shadow pools
     else
        ndecomp_pools               = 7
        ndecomp_cascade_transitions = 7
@@ -175,13 +190,15 @@ contains
 
        ibeg = 1
 
-       !-- properties of each pathway along decomposition cascade 
+       !-- properties of each pathway along decomposition cascade
        allocate(decomp_cascade_con%cascade_step_name(1:ndecomp_cascade_transitions))
        allocate(decomp_cascade_con%cascade_donor_pool(1:ndecomp_cascade_transitions))
        allocate(decomp_cascade_con%cascade_receiver_pool(1:ndecomp_cascade_transitions))
-   
+
        !-- properties of each decomposing pool
-       allocate(decomp_cascade_con%floating_cn_ratio_decomp_pools(ibeg:ndecomp_pools))
+       ! allocate floating_cn_ratio_decomp_pools, is_shadow with lbound=0,
+       ! to avoid bounds error when accessing with index i_atm(==0), easing later code
+       allocate(decomp_cascade_con%floating_cn_ratio_decomp_pools(0:ndecomp_pools))
        allocate(decomp_cascade_con%decomp_pool_name_restart(ibeg:ndecomp_pools))
        allocate(decomp_cascade_con%decomp_pool_name_history(ibeg:ndecomp_pools))
        allocate(decomp_cascade_con%decomp_pool_name_long(ibeg:ndecomp_pools))
@@ -190,6 +207,7 @@ contains
        allocate(decomp_cascade_con%is_litter(ibeg:ndecomp_pools))
        allocate(decomp_cascade_con%is_soil(ibeg:ndecomp_pools))
        allocate(decomp_cascade_con%is_cwd(ibeg:ndecomp_pools))
+       allocate(decomp_cascade_con%is_shadow(0:ndecomp_pools))
        allocate(decomp_cascade_con%initial_cn_ratio(ibeg:ndecomp_pools))
        allocate(decomp_cascade_con%initial_stock(ibeg:ndecomp_pools))
        allocate(decomp_cascade_con%is_metabolic(ibeg:ndecomp_pools))
@@ -200,14 +218,14 @@ contains
        ! Allocate soil matrix data
        if(use_soil_matrixcn)then
        end if
-   
-       !-- properties of each pathway along decomposition cascade 
+
+       !-- properties of each pathway along decomposition cascade
        decomp_cascade_con%cascade_step_name(1:ndecomp_cascade_transitions) = ''
        decomp_cascade_con%cascade_donor_pool(1:ndecomp_cascade_transitions) = 0
        decomp_cascade_con%cascade_receiver_pool(1:ndecomp_cascade_transitions) = 0
-   
+
        !-- first initialization of properties of each decomposing pool
-       decomp_cascade_con%floating_cn_ratio_decomp_pools(ibeg:ndecomp_pools) = .false.
+       decomp_cascade_con%floating_cn_ratio_decomp_pools(0:ndecomp_pools)    = .false.
        decomp_cascade_con%decomp_pool_name_history(ibeg:ndecomp_pools)       = ''
        decomp_cascade_con%decomp_pool_name_restart(ibeg:ndecomp_pools)       = ''
        decomp_cascade_con%decomp_pool_name_long(ibeg:ndecomp_pools)          = ''
@@ -216,6 +234,7 @@ contains
        decomp_cascade_con%is_litter(ibeg:ndecomp_pools)                      = .false.
        decomp_cascade_con%is_soil(ibeg:ndecomp_pools)                        = .false.
        decomp_cascade_con%is_cwd(ibeg:ndecomp_pools)                         = .false.
+       decomp_cascade_con%is_shadow(0:ndecomp_pools)                         = .false.
        decomp_cascade_con%initial_cn_ratio(ibeg:ndecomp_pools)               = nan
        decomp_cascade_con%initial_stock(ibeg:ndecomp_pools)                  = nan
        decomp_cascade_con%initial_stock_soildepth                            = 0.3
@@ -243,7 +262,7 @@ contains
     use SparseMatrixMultiplyMod, only : sparse_matrix_type, diag_matrix_type, vector_type
     ! !LOGAL VARIABLES:
     integer i,j,k,m,n
-  
+
   end subroutine InitSoilTransfer
 
 end module SoilBiogeochemDecompCascadeConType

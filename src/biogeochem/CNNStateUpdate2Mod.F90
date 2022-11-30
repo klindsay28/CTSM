@@ -11,9 +11,9 @@ module CNNStateUpdate2Mod
   use shr_kind_mod                    , only : r8 => shr_kind_r8
   use clm_time_manager                , only : get_step_size_real
   use clm_varpar                      , only : nlevsoi, nlevdecomp
-  use clm_varpar                      , only : i_litr_min, i_litr_max, i_cwd
+  use clm_varpar                      , only : i_litr_min, i_litr_max, i_cwd, i_shadow_cwd
   use clm_varctl                      , only : iulog
-  use SoilBiogeochemDecompCascadeConType, only : use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType, only : use_soil_matrixcn, use_soil_nk_shadow
   use CNSharedParamsMod               , only : use_matrixcn
   use CNVegNitrogenStateType          , only : cnveg_nitrogenstate_type
   use CNVegNitrogenFluxType           , only : cnveg_nitrogenflux_type
@@ -57,7 +57,7 @@ contains
     real(r8) :: dt      ! radiation time step (seconds)
     !-----------------------------------------------------------------------
 
-    associate(                                        & 
+    associate(                                        &
          nf_veg => cnveg_nitrogenflux_inst          , &
          ns_veg => cnveg_nitrogenstate_inst         , &
          nf_soil => soilbiogeochem_nitrogenflux_inst, &
@@ -76,7 +76,7 @@ contains
             !
             ! State update without the matrix solution
             !
-            if (.not. use_soil_matrixcn)then 
+            if (.not. use_soil_matrixcn)then
                do i = i_litr_min, i_litr_max
                   ns_soil%decomp_npools_vr_col(c,j,i) = &
                      ns_soil%decomp_npools_vr_col(c,j,i) + &
@@ -86,6 +86,9 @@ contains
                !           i_cwd = 0 if fates, so not including in the i-loop
                ns_soil%decomp_npools_vr_col(c,j,i_cwd)     = &
                  ns_soil%decomp_npools_vr_col(c,j,i_cwd)     + nf_veg%gap_mortality_n_to_cwdn_col(c,j)       * dt
+               if (use_soil_nk_shadow) &
+                  ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd)     = &
+                    ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd)     + nf_veg%gap_mortality_n_to_cwdn_col(c,j)       * dt
             !
             ! For the matrix solution the actual state update comes after the matrix
             ! multiply in SoilMatrix, but the matrix needs to be setup with
@@ -197,7 +200,7 @@ contains
     real(r8):: dt      ! radiation time step (seconds)
     !-----------------------------------------------------------------------
 
-    associate(                                 & 
+    associate(                                 &
          nf_veg  => cnveg_nitrogenflux_inst  , &
          ns_veg  => cnveg_nitrogenstate_inst , &
          nf_soil => soilbiogeochem_nitrogenflux_inst ,  &
@@ -225,6 +228,9 @@ contains
                !           i_cwd = 0 if fates, so not including in the i-loop
                ns_soil%decomp_npools_vr_col(c,j,i_cwd)     = &
                  ns_soil%decomp_npools_vr_col(c,j,i_cwd)     + nf_veg%harvest_n_to_cwdn_col(c,j)       * dt
+               if (use_soil_nk_shadow) &
+                  ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd)     = &
+                    ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd)     + nf_veg%harvest_n_to_cwdn_col(c,j)       * dt
             !
             ! For the matrix solution the actual state update comes after the matrix
             ! multiply in SoilMatrix, but the matrix needs to be setup with

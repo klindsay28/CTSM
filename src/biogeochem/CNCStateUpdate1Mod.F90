@@ -11,7 +11,7 @@ module CNCStateUpdate1Mod
   use shr_log_mod                        , only : errMsg => shr_log_errMsg
   use clm_varpar                         , only : ndecomp_cascade_transitions, nlevdecomp
   use clm_time_manager                   , only : get_step_size_real
-  use clm_varpar                         , only : i_litr_min, i_litr_max, i_cwd
+  use clm_varpar                         , only : i_litr_min, i_litr_max, i_cwd, i_shadow_cwd
   use pftconMod                          , only : npcropmin, nc3crop, pftcon
   use abortutils                         , only : endrun
   use decompMod                          , only : bounds_type
@@ -19,7 +19,7 @@ module CNCStateUpdate1Mod
   use CNVegCarbonFluxType                , only : cnveg_carbonflux_type
   use CropType                           , only : crop_type
   use CropReprPoolsMod                   , only : nrepr, repr_grain_min, repr_grain_max, repr_structure_min, repr_structure_max
-  use SoilBiogeochemDecompCascadeConType , only : decomp_cascade_con, use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType , only : decomp_cascade_con, use_soil_matrixcn, use_soil_nk_shadow
   use SoilBiogeochemCarbonFluxType       , only : soilbiogeochem_carbonflux_type
   use SoilBiogeochemCarbonStateType      , only : soilbiogeochem_carbonstate_type
   use PatchType                          , only : patch
@@ -45,7 +45,7 @@ contains
     ! Update carbon states based on fluxes from dyn_cnbal_patch
     !
     ! !ARGUMENTS:
-    type(bounds_type), intent(in)    :: bounds      
+    type(bounds_type), intent(in)    :: bounds
     integer, intent(in) :: num_soilc_with_inactive       ! number of columns in soil filter
     integer, intent(in) :: filter_soilc_with_inactive(:) ! soil column filter that includes inactive points
     type(cnveg_carbonflux_type)           , intent(in)    :: cnveg_carbonflux_inst
@@ -82,6 +82,9 @@ contains
              end do
              cs_soil%decomp_cpools_vr_col(c,j,i_cwd) = cs_soil%decomp_cpools_vr_col(c,j,i_cwd) + &
                   ( cf_veg%dwt_livecrootc_to_cwdc_col(c,j) + cf_veg%dwt_deadcrootc_to_cwdc_col(c,j) ) * dt
+             if (use_soil_nk_shadow) &
+                cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) = cs_soil%decomp_cpools_vr_col(c,j,i_shadow_cwd) + &
+                     ( cf_veg%dwt_livecrootc_to_cwdc_col(c,j) + cf_veg%dwt_deadcrootc_to_cwdc_col(c,j) ) * dt
           end do
        end do
 
@@ -115,7 +118,7 @@ contains
     real(r8):: dt ! radiation time step (seconds)
     !-----------------------------------------------------------------------
 
-    associate(                             & 
+    associate(                             &
          cf_veg => cnveg_carbonflux_inst , &
          cs_veg => cnveg_carbonstate_inst  &
          )
@@ -132,7 +135,7 @@ contains
          cs_veg%cpool_patch(p) = cs_veg%cpool_patch(p) + cf_veg%psnshade_to_cpool_patch(p)*dt
       end do
 
-     
+
     end associate
 
   end subroutine CStateUpdate0
@@ -167,15 +170,15 @@ contains
     real(r8), parameter :: kprod05 = 1.44e-7_r8  ! decay constant for 0.5-year product pool (1/s) (lose ~90% over a half year)
     !-----------------------------------------------------------------------
 
-    associate(                                                               & 
-         ivt                   => patch%itype                                , & ! Input:  [integer  (:)     ]  patch vegetation type                                
+    associate(                                                               &
+         ivt                   => patch%itype                                , & ! Input:  [integer  (:)     ]  patch vegetation type
 
          woody                 => pftcon%woody                             , & ! Input:  binary flag for woody lifeform (1=woody, 0=not woody)
 
          cascade_donor_pool    => decomp_cascade_con%cascade_donor_pool    , & ! Input:  [integer  (:)     ]  which pool is C taken from for a given decomposition step
          cascade_receiver_pool => decomp_cascade_con%cascade_receiver_pool , & ! Input:  [integer  (:)     ]  which pool is C added to for a given decomposition step
 
-         harvdate              => crop_inst%harvdate_patch                 , & ! Input:  [integer  (:)     ]  harvest date                                       
+         harvdate              => crop_inst%harvdate_patch                 , & ! Input:  [integer  (:)     ]  harvest date
 
          cf_veg                => cnveg_carbonflux_inst                    , & ! Output:
          cs_veg                => cnveg_carbonstate_inst                   , & ! Output:
@@ -188,7 +191,7 @@ contains
       ! Below is the input into the soil biogeochemistry model
 
       ! plant to litter fluxes
-      if (.not. use_fates) then    
+      if (.not. use_fates) then
          do j = 1,nlevdecomp
             do fc = 1,num_soilc
                c = filter_soilc(fc)
@@ -206,6 +209,8 @@ contains
                   ! terms have been moved to CStateUpdateDynPatch. I think this is zeroed every
                   ! time step, but to be safe, I'm explicitly setting it to zero here.
                   cf_soil%decomp_cpools_sourcesink_col(c,j,i_cwd) = 0._r8
+                  if (use_soil_nk_shadow) &
+                     cf_soil%decomp_cpools_sourcesink_col(c,j,i_shadow_cwd) = 0._r8
                !
                ! For the matrix solution the actual state update comes after the matrix
                ! multiply in SoilMatrix, but the matrix needs to be setup with
@@ -231,7 +236,7 @@ contains
             end do
          end do
       endif
-         
+
       if ( .not. use_fates_sp ) then !use_fates
          ! litter and SOM HR fluxes
          do k = 1, ndecomp_cascade_transitions
@@ -245,7 +250,7 @@ contains
                      cf_soil%decomp_cpools_sourcesink_col(c,j,cascade_donor_pool(k)) = &
                        cf_soil%decomp_cpools_sourcesink_col(c,j,cascade_donor_pool(k)) &
                        - ( cf_soil%decomp_cascade_hr_vr_col(c,j,k) + cf_soil%decomp_cascade_ctransfer_vr_col(c,j,k)) *dt
-                  end if !not use_soil_matrixcn 
+                  end if !not use_soil_matrixcn
                end do
             end do
          end do
@@ -268,7 +273,7 @@ contains
          end do
       end if
 
-    if (.not. use_fates) then    
+    if (.not. use_fates) then
 ptch: do fp = 1,num_soilp
          p = filter_soilp(fp)
          c = patch%column(p)
@@ -310,7 +315,7 @@ ptch: do fp = 1,num_soilp
            ! phenology: litterfall fluxes
            cs_veg%leafc_patch(p) = cs_veg%leafc_patch(p) - cf_veg%leafc_to_litter_patch(p)*dt
            cs_veg%frootc_patch(p) = cs_veg%frootc_patch(p) - cf_veg%frootc_to_litter_patch(p)*dt
-         
+
            ! livewood turnover fluxes
            if (woody(ivt(p)) == 1._r8) then
               cs_veg%livestemc_patch(p)  = cs_veg%livestemc_patch(p)  - cf_veg%livestemc_to_deadstemc_patch(p)*dt
@@ -343,13 +348,13 @@ ptch: do fp = 1,num_soilp
          !
          else
             ! NOTE: Changes for above that apply for matrix code are in CNPhenology EBK (11/26/2019)
- 
+
             ! This part below MUST match exactly the code for the non-matrix part
             ! above!
          end if !not use_matrixcn
 
          check_cpool = cs_veg%cpool_patch(p)- cf_veg%psnsun_to_cpool_patch(p)*dt-cf_veg%psnshade_to_cpool_patch(p)*dt
-         cpool_delta  =  cs_veg%cpool_patch(p) 
+         cpool_delta  =  cs_veg%cpool_patch(p)
 
          ! maintenance respiration fluxes from cpool
 
@@ -366,13 +371,13 @@ ptch: do fp = 1,num_soilp
                  cs_veg%cpool_patch(p) = cs_veg%cpool_patch(p) - cf_veg%reproductive_curmr_patch(p,k)*dt
               end do
          end if
-         
-         
+
+
          cs_veg%cpool_patch(p) = cs_veg%cpool_patch(p) -  cf_veg%cpool_to_resp_patch(p)*dt
 
-         !RF Add in the carbon spent on uptake respiration. 
+         !RF Add in the carbon spent on uptake respiration.
          cs_veg%cpool_patch(p)= cs_veg%cpool_patch(p) - cf_veg%soilc_change_patch(p)*dt
-           
+
          ! maintenance respiration fluxes from xsmrpool
          cs_veg%xsmrpool_patch(p) = cs_veg%xsmrpool_patch(p) + cf_veg%cpool_to_xsmrpool_patch(p)*dt
          cs_veg%xsmrpool_patch(p) = cs_veg%xsmrpool_patch(p) - cf_veg%leaf_xsmr_patch(p)*dt
@@ -394,7 +399,7 @@ ptch: do fp = 1,num_soilp
          cs_veg%cpool_patch(p)             = cs_veg%cpool_patch(p)          - cf_veg%cpool_to_leafc_patch(p)*dt
          cs_veg%cpool_patch(p)             = cs_veg%cpool_patch(p)          - cf_veg%cpool_to_leafc_storage_patch(p)*dt
          cs_veg%cpool_patch(p)             = cs_veg%cpool_patch(p)          - cf_veg%cpool_to_frootc_patch(p)*dt
-         cs_veg%cpool_patch(p)             = cs_veg%cpool_patch(p)          - cf_veg%cpool_to_frootc_storage_patch(p)*dt 
+         cs_veg%cpool_patch(p)             = cs_veg%cpool_patch(p)          - cf_veg%cpool_to_frootc_storage_patch(p)*dt
          !
          ! State update without the matrix solution
          !
@@ -428,7 +433,7 @@ ptch: do fp = 1,num_soilp
             cs_veg%cpool_patch(p)              = cs_veg%cpool_patch(p)              - cf_veg%cpool_to_livecrootc_patch(p)*dt
             cs_veg%cpool_patch(p)              = cs_veg%cpool_patch(p)              - cf_veg%cpool_to_livecrootc_storage_patch(p)*dt
             cs_veg%cpool_patch(p)              = cs_veg%cpool_patch(p)              - cf_veg%cpool_to_deadcrootc_patch(p)*dt
-            cs_veg%cpool_patch(p)              = cs_veg%cpool_patch(p)              - cf_veg%cpool_to_deadcrootc_storage_patch(p)*dt 
+            cs_veg%cpool_patch(p)              = cs_veg%cpool_patch(p)              - cf_veg%cpool_to_deadcrootc_storage_patch(p)*dt
             !
             ! State update without the matrix solution
             !
@@ -622,8 +627,8 @@ ptch: do fp = 1,num_soilp
                ! an intent(inout)
                ! fluxes should not be updated in this module - not sure where
                ! this belongs
-               ! DML (06-20-2017) While debugging crop isotope code, found that cpool_patch and frootc_patch 
-               ! could occasionally be very small but nonzero numbers after crop harvest, which persists 
+               ! DML (06-20-2017) While debugging crop isotope code, found that cpool_patch and frootc_patch
+               ! could occasionally be very small but nonzero numbers after crop harvest, which persists
                ! through to next planting and for reasons that could not 100%
                ! isolate, caused C12/C13 ratios to occasionally go out of
                ! bounds. Zeroing out these small pools and putting them into the flux to the
@@ -673,12 +678,12 @@ ptch: do fp = 1,num_soilp
                cs_veg%xsmrpool_loss_patch(p) = cs_veg%xsmrpool_loss_patch(p) - cf_veg%xsmrpool_to_atm_patch(p) * dt
             end if
          end if
-         
+
       end do ptch ! end of patch loop
     end if   ! end of NOT fates
-    
+
     end associate
-  
+
   end subroutine CStateUpdate1
 
 end module CNCStateUpdate1Mod

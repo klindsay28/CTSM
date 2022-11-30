@@ -561,11 +561,12 @@ contains
      ! When the simulation has run fewer than this number of steps,
      ! re-scale the e-folding time to get a stable early estimate.
 
-     ! find which pool is the cwd pool
+     ! find first pool which is the cwd pool
      i_cwd = 0
      do l = 1, ndecomp_pools
         if ( is_cwd(l) ) then
            i_cwd = l
+           exit
         endif
      end do
 

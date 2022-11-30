@@ -13,9 +13,9 @@ module CNNStateUpdate3Mod
   use clm_varpar                      , only: nlevdecomp, ndecomp_pools
   use clm_time_manager                , only : get_step_size_real
   use clm_varctl                      , only : iulog, use_nitrif_denitrif
-  use SoilBiogeochemDecompCascadeConType, only : use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType, only : use_soil_matrixcn, use_soil_nk_shadow
   use CNSharedParamsMod               , only : use_matrixcn
-  use clm_varpar                      , only : i_litr_min, i_litr_max, i_cwd
+  use clm_varpar                      , only : i_litr_min, i_litr_max, i_cwd, i_shadow_cwd
   use CNVegNitrogenStateType          , only : cnveg_nitrogenstate_type
   use CNVegNitrogenFluxType           , only : cnveg_nitrogenflux_type
   use SoilBiogeochemNitrogenStateType , only : soilbiogeochem_nitrogenstate_type
@@ -57,7 +57,7 @@ contains
     real(r8):: dt         ! radiation time step (seconds)
     !-----------------------------------------------------------------------
 
-    associate(                                         & 
+    associate(                                         &
          nf_veg  => cnveg_nitrogenflux_inst          , & ! Input
          ns_veg  => cnveg_nitrogenstate_inst         , & ! Output
          nf_soil => soilbiogeochem_nitrogenflux_inst , & ! Input
@@ -92,6 +92,9 @@ contains
             if (.not. use_soil_matrixcn)then
                ns_soil%decomp_npools_vr_col(c,j,i_cwd) = ns_soil%decomp_npools_vr_col(c,j,i_cwd) + &
                  nf_veg%fire_mortality_n_to_cwdn_col(c,j) * dt
+               if (use_soil_nk_shadow) &
+                  ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd) = ns_soil%decomp_npools_vr_col(c,j,i_shadow_cwd) + &
+                    nf_veg%fire_mortality_n_to_cwdn_col(c,j) * dt
 
                ! patch-level wood to column-level litter (uncombusted wood)
                do k = i_litr_min, i_litr_max
@@ -133,7 +136,7 @@ contains
          end do
       end if ! not use_soil_matrixcn
 
-      ! patch-level nitrogen fluxes 
+      ! patch-level nitrogen fluxes
 
       do fp = 1,num_soilp
          p = filter_soilp(fp)
@@ -141,7 +144,7 @@ contains
          !
          ! State update without the matrix solution
          !
-         if(.not. use_matrixcn)then 
+         if(.not. use_matrixcn)then
             !from fire displayed pools
             ns_veg%leafn_patch(p) =  ns_veg%leafn_patch(p) -                           &
               nf_veg%m_leafn_to_fire_patch(p) * dt
@@ -171,7 +174,7 @@ contains
                nf_veg%m_livecrootn_to_deadcrootn_fire_patch(p) * dt
             ns_veg%deadcrootn_patch(p) =  ns_veg%deadcrootn_patch(p) -                 &
                nf_veg%m_deadcrootn_to_litter_fire_patch(p) * dt +                    &
-               nf_veg%m_livecrootn_to_deadcrootn_fire_patch(p) * dt 
+               nf_veg%m_livecrootn_to_deadcrootn_fire_patch(p) * dt
 
             ! storage pools
             ns_veg%leafn_storage_patch(p) =  ns_veg%leafn_storage_patch(p) -           &
@@ -244,7 +247,7 @@ contains
          end if !.not. use_matrixcn
       end do
 
-    end associate 
+    end associate
 
   end subroutine NStateUpdate3
 
