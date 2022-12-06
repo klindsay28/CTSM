@@ -140,7 +140,7 @@ contains
   !-----------------------------------------------------------------------
   subroutine CStateUpdate1( num_soilc, filter_soilc, num_soilp, filter_soilp, &
        crop_inst, cnveg_carbonflux_inst, cnveg_carbonstate_inst, &
-       soilbiogeochem_carbonflux_inst, dribble_crophrv_xsmrpool_2atm)
+       soilbiogeochem_carbonflux_inst, dribble_crophrv_xsmrpool_2atm, update_veg_inst)
     !
     ! !DESCRIPTION:
     ! On the radiation time step, update all the prognostic carbon state
@@ -157,6 +157,7 @@ contains
     type(cnveg_carbonstate_type)         , intent(inout) :: cnveg_carbonstate_inst
     type(soilbiogeochem_carbonflux_type) , intent(inout) :: soilbiogeochem_carbonflux_inst
     logical                              , intent(in)    :: dribble_crophrv_xsmrpool_2atm
+    logical                   , optional , intent(in)    :: update_veg_inst ! TRUE => veg instances get updated
     !
     ! !LOCAL VARIABLES:
     integer  :: c,p,j,k,l,i  ! indices
@@ -165,7 +166,14 @@ contains
     real(r8) :: check_cpool
     real(r8) :: cpool_delta
     real(r8), parameter :: kprod05 = 1.44e-7_r8  ! decay constant for 0.5-year product pool (1/s) (lose ~90% over a half year)
+    logical :: l_update_veg_inst
     !-----------------------------------------------------------------------
+
+    if (present(update_veg_inst)) then
+       l_update_veg_inst = update_veg_inst
+    else
+       l_update_veg_inst = .true.
+    end if
 
     associate(                                                               & 
          ivt                   => patch%itype                                , & ! Input:  [integer  (:)     ]  patch vegetation type                                
@@ -268,7 +276,7 @@ contains
          end do
       end if
 
-    if (.not. use_fates) then    
+    if (.not. use_fates .and. l_update_veg_inst) then
 ptch: do fp = 1,num_soilp
          p = filter_soilp(fp)
          c = patch%column(p)
@@ -675,7 +683,7 @@ ptch: do fp = 1,num_soilp
          end if
          
       end do ptch ! end of patch loop
-    end if   ! end of NOT fates
+    end if   ! end of NOT fates .and. l_update_veg_inst
     
     end associate
   

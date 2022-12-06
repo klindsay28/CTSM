@@ -71,18 +71,14 @@ contains
 
     class(soilbiogeochem_carbonstate_type)                       :: this
     type(bounds_type)                     , intent(in)           :: bounds  
-    character(len=3)                      , intent(in)           :: carbon_type
+    character(len=*)                      , intent(in)           :: carbon_type
     real(r8)                              , intent(in)           :: ratio
     type(soilbiogeochem_carbonstate_type) , intent(in), optional :: c12_soilbiogeochem_carbonstate_inst
 
     this%totvegcthresh = nan
     call this%InitAllocate ( bounds)
     call this%InitHistory ( bounds, carbon_type )
-    if (present(c12_soilbiogeochem_carbonstate_inst)) then
-       call this%InitCold  ( bounds, ratio, c12_soilbiogeochem_carbonstate_inst )
-    else
-       call this%InitCold  ( bounds, ratio) 
-    end if
+    call this%InitCold  ( bounds, ratio, c12_soilbiogeochem_carbonstate_inst )
 
   end subroutine Init
 
@@ -139,7 +135,7 @@ contains
     ! !ARGUMENTS:
     class (soilbiogeochem_carbonstate_type) :: this
     type(bounds_type) , intent(in)          :: bounds 
-    character(len=3)  , intent(in)          :: carbon_type
+    character(len=*)  , intent(in)          :: carbon_type
     !
     ! !LOCAL VARIABLES:
     integer           :: l
@@ -247,7 +243,27 @@ contains
             &only makes sense at the column level: should not be averaged to gridcell', &
             ptr_col=this%dyn_cbal_adjustments_col, default='inactive')
 
-   end if
+    end if
+
+    !--------------------------------------
+    ! Shadow C12 state variables - column
+    !--------------------------------------
+
+    if (carbon_type == 'shadow_c12') then
+
+       this%decomp_cpools_vr_col(begc:endc,:,:) = spval
+       do l = 1, ndecomp_pools
+          if ( nlevdecomp_full > 1 ) then
+             data2dptr => this%decomp_cpools_vr_col(:,1:nlevdecomp_full,l)
+             fieldname = 'SHADOW_'//trim(decomp_cascade_con%decomp_pool_name_history(l))//'C_vr'
+             longname =  'Shadow '//trim(decomp_cascade_con%decomp_pool_name_history(l))//' C (vertically resolved)'
+             call hist_addfld2d (fname=fieldname, units='gC/m^3',  type2d='levdcmp', &
+                  avgflag='A', long_name=longname, &
+                  ptr_col=data2dptr)
+          endif
+       end do
+
+    endif
 
     !-------------------------------
     ! C13 state variables - column
@@ -572,7 +588,7 @@ contains
     type(bounds_type)                     , intent(in)           :: bounds 
     type(file_desc_t)                     , intent(inout)        :: ncid   ! netcdf id
     character(len=*)                      , intent(in)           :: flag   !'read' or 'write'
-    character(len=3)                      , intent(in)           :: carbon_type ! 'c12' or 'c13' or 'c14'
+    character(len=*)                      , intent(in)           :: carbon_type ! 'c12', 'shadow_c12', 'c13', or 'c14'
     real(r8)                              , intent(in)           :: totvegc_col(bounds%begc:bounds%endc) ! (gC/m2) total 
                                                                                                          ! vegetation carbon
     type(soilbiogeochem_carbonstate_type) , intent(in), optional :: c12_soilbiogeochem_carbonstate_inst
@@ -591,6 +607,10 @@ contains
     logical  :: found = .false.
     integer  :: i_decomp,j_decomp,i_lev,j_lev
     !------------------------------------------------------------------------
+
+    !--------------------------------
+    ! C12 column carbon state variables
+    !--------------------------------
 
     if (carbon_type == 'c12') then
 
@@ -621,6 +641,42 @@ contains
           call endrun(msg='ERROR:: '//trim(varname)//' is required on an initialization dataset'//&
                errMsg(sourcefile, __LINE__))
        end if
+
+    end if
+
+    !---------------------------------------
+    ! Shadow C12 column carbon state variables
+    !---------------------------------------
+
+    if (carbon_type == 'shadow_c12') then
+
+       do k = 1, ndecomp_pools
+          varname='shadow_'//trim(decomp_cascade_con%decomp_pool_name_restart(k))//'c'
+          ptr2d => this%decomp_cpools_vr_col(:,:,k)
+          call restartvar(ncid=ncid, flag=flag, varname=trim(varname)//"_vr", xtype=ncd_double,  &
+               dim1name='column', dim2name='levgrnd', switchdim=.true., &
+               long_name='',  units='g/m3', fill_value=spval, &
+               scale_by_thickness=.false., &
+               interpinic_flag='interp', readvar=readvar, data=ptr2d)
+          if (flag=='read' .and. .not. readvar) then
+             write(iulog,*) 'initializing shadow_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col' &
+                  // ' with c12 value for: '//trim(varname)
+             do i = bounds%begc,bounds%endc
+                do j = 1, nlevdecomp
+                   if (this%decomp_cpools_vr_col(i,j,k) /= spval .and. .not. isnan(this%decomp_cpools_vr_col(i,j,k)) ) then
+                      this%decomp_cpools_vr_col(i,j,k) = c12_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col(i,j,k)
+                   endif
+                end do
+             end do
+          end if
+       end do
+
+       ptr2d => this%ctrunc_vr_col
+       call restartvar(ncid=ncid, flag=flag, varname='shadow_col_ctrunc_vr', xtype=ncd_double,  &
+            dim1name='column', dim2name='levgrnd', switchdim=.true., &
+            long_name='',  units='gC/m3', fill_value=spval, &
+            scale_by_thickness=.false., &
+            interpinic_flag='interp', readvar=readvar, data=ptr2d)
 
     end if
 

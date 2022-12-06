@@ -18,6 +18,7 @@ module SoilBiogeochemDecompCascadeBGCMod
   use abortutils                         , only : endrun
   use CNSharedParamsMod                  , only : CNParamsShareInst, nlev_soildecomp_standard 
   use SoilBiogeochemDecompCascadeConType , only : decomp_cascade_con, InitSoilTransfer, use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType , only : use_nk_solver_settings
   use SoilBiogeochemStateType            , only : soilbiogeochem_state_type
   use SoilBiogeochemCarbonFluxType       , only : soilbiogeochem_carbonflux_type
   use SoilStateType                      , only : soilstate_type
@@ -537,6 +538,7 @@ contains
     real(r8), allocatable:: fr(:,:)         ! column-level rooting fraction by soil depth
     real(r8):: psi                          ! temporary soilpsi for water scalar
     real(r8):: rate_scalar                  ! combined rate scalar for decomp
+    real(r8):: k_min                        ! minimum decomposition rate constant (1/sec)
     real(r8):: k_l1                         ! decomposition rate constant litter 1 (1/sec)
     real(r8):: k_l2_l3                      ! decomposition rate constant litter 2 and litter 3 (1/sec)
     real(r8):: k_s1                         ! decomposition rate constant SOM 1 (1/sec)
@@ -608,6 +610,11 @@ contains
       decomp_depth_efolding = CNParamsShareInst%decomp_depth_efolding
 
       ! translate to per-second time constant
+      if (use_nk_solver_settings) then
+         k_min = 1._r8/ (secspday * days_per_year * 1.e4_r8)
+      else
+         k_min = 0._r8
+      endif
       k_l1 = 1._r8    / (secspday * days_per_year * params_inst%tau_l1_bgc)
       k_l2_l3 = 1._r8 / (secspday * days_per_year * params_inst%tau_l2_l3_bgc)
       k_s1 = 1._r8    / (secspday * days_per_year * params_inst%tau_s1_bgc)
@@ -877,23 +884,23 @@ contains
       do j = 1,nlevdecomp
          do fc = 1,num_soilc
             c = filter_soilc(fc)
-            decomp_k(c,j,i_met_lit) = k_l1    * t_scalar(c,j) * w_scalar(c,j) * &
-               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_l1(c)
-            decomp_k(c,j,i_cel_lit) = k_l2_l3 * t_scalar(c,j) * w_scalar(c,j) * &
-               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_l23(c)
-            decomp_k(c,j,i_lig_lit) = k_l2_l3 * t_scalar(c,j) * w_scalar(c,j) * &
-               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_l23(c)
-            decomp_k(c,j,i_act_som) = k_s1    * t_scalar(c,j) * w_scalar(c,j) * &
-               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_s1(c)
-            decomp_k(c,j,i_slo_som) = k_s2    * t_scalar(c,j) * w_scalar(c,j) * &
-               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_s2(c)
-            decomp_k(c,j,i_pas_som) = k_s3    * t_scalar(c,j) * w_scalar(c,j) * &
-               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_s3(c)
+            decomp_k(c,j,i_met_lit) = max(k_min, k_l1    * t_scalar(c,j) * w_scalar(c,j) * &
+               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_l1(c))
+            decomp_k(c,j,i_cel_lit) = max(k_min, k_l2_l3 * t_scalar(c,j) * w_scalar(c,j) * &
+               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_l23(c))
+            decomp_k(c,j,i_lig_lit) = max(k_min, k_l2_l3 * t_scalar(c,j) * w_scalar(c,j) * &
+               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_l23(c))
+            decomp_k(c,j,i_act_som) = max(k_min, k_s1    * t_scalar(c,j) * w_scalar(c,j) * &
+               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_s1(c))
+            decomp_k(c,j,i_slo_som) = max(k_min, k_s2    * t_scalar(c,j) * w_scalar(c,j) * &
+               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_s2(c))
+            decomp_k(c,j,i_pas_som) = max(k_min, k_s3    * t_scalar(c,j) * w_scalar(c,j) * &
+               depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_s3(c))
             ! same for cwd but only if fates is not enabled; fates handles CWD
             ! on its own structure
             if (.not. use_fates) then
-               decomp_k(c,j,i_cwd) = k_frag * t_scalar(c,j) * w_scalar(c,j) * &
-                  depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_cwd(c)
+               decomp_k(c,j,i_cwd) = max(k_min, k_frag * t_scalar(c,j) * w_scalar(c,j) * &
+                  depth_scalar(c,j) * o_scalar(c,j) * spinup_geogterm_cwd(c))
             end if
             ! Above into soil matrix
             if(use_soil_matrixcn)then

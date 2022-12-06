@@ -13,6 +13,7 @@ module CNDriverMod
   use clm_varctl                      , only : use_nitrif_denitrif, use_nguardrail
   use clm_varctl                      , only : iulog, use_crop, use_crop_agsys
   use SoilBiogeochemDecompCascadeConType, only : mimics_decomp, century_decomp, decomp_method
+  use SoilBiogeochemDecompCascadeConType, only : use_shadow_soilpools
   use CNSharedParamsMod               , only : use_fun
   use CNVegStateType                  , only : cnveg_state_type
   use CNVegCarbonStateType            , only : cnveg_carbonstate_type
@@ -95,6 +96,7 @@ contains
        cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst,                                  &
        c_products_inst, c13_products_inst, c14_products_inst, n_products_inst,             &
        soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst,                    &
+       shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst,      &
        c13_soilbiogeochem_carbonflux_inst, c13_soilbiogeochem_carbonstate_inst,            &
        c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst,            &
        soilbiogeochem_state_inst,                                                          &
@@ -126,6 +128,7 @@ contains
     use CNGRespMod                        , only: CNGResp
     use FireMethodType                    , only: fire_method_type
     use CNCIsoFluxMod                     , only: CIsoFlux1, CIsoFlux2, CIsoFlux2h, CIsoFlux3
+    use CNCShadowFluxMod                  , only: CShadowFlux1
     use CNC14DecayMod                     , only: C14Decay
     use CNCStateUpdate1Mod                , only: CStateUpdate1,CStateUpdate0
     use CNCStateUpdate2Mod                , only: CStateUpdate2, CStateUpdate2h
@@ -182,6 +185,8 @@ contains
     type(soilbiogeochem_state_type)         , intent(inout) :: soilbiogeochem_state_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: soilbiogeochem_carbonstate_inst
+    type(soilbiogeochem_carbonflux_type)    , intent(inout) :: shadow_soilbiogeochem_carbonflux_inst
+    type(soilbiogeochem_carbonstate_type)   , intent(inout) :: shadow_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c13_soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c13_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c14_soilbiogeochem_carbonflux_inst
@@ -249,6 +254,10 @@ contains
     dummy_to_make_pgi_happy = ubound(filter_soilc, 1)
     call soilbiogeochem_carbonflux_inst%SetValues( &
          num_soilc, filter_soilc, 0._r8)
+    if ( use_shadow_soilpools ) then
+       call shadow_soilbiogeochem_carbonflux_inst%SetValues( &
+            num_soilc, filter_soilc, 0._r8)
+    end if
     if ( use_c13 ) then
        call c13_soilbiogeochem_carbonflux_inst%SetValues( &
             num_soilc, filter_soilc, 0._r8)
@@ -603,6 +612,13 @@ contains
 
     call t_startf('CNUpdate1')
 
+    ! Set the shadow carbon flux variables (except for gap-phase mortality and fire fluxes)
+    if ( use_shadow_soilpools ) then
+       call CShadowFlux1(num_soilc, filter_soilc, &
+            soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst, &
+            shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst)
+    end if
+
     ! Set the carbon isotopic flux variables (except for gap-phase mortality and fire fluxes)
     if ( use_c13 ) then
 
@@ -628,6 +644,12 @@ contains
     call CStateUpdate1( num_soilc, filter_soilc, num_soilp, filter_soilp, &
          crop_inst, cnveg_carbonflux_inst, cnveg_carbonstate_inst, &
          soilbiogeochem_carbonflux_inst, dribble_crophrv_xsmrpool_2atm)
+    if ( use_shadow_soilpools ) then
+       call CStateUpdate1( num_soilc, filter_soilc, num_soilp, filter_soilp, &
+            crop_inst, cnveg_carbonflux_inst, cnveg_carbonstate_inst, &
+            shadow_soilbiogeochem_carbonflux_inst, dribble_crophrv_xsmrpool_2atm, &
+            update_veg_inst=.false.)
+    end if
     if ( use_c13 ) then
        call CStateUpdate1(num_soilc, filter_soilc, num_soilp, filter_soilp, &
             crop_inst, c13_cnveg_carbonflux_inst, c13_cnveg_carbonstate_inst, &
@@ -668,6 +690,7 @@ contains
     call SoilBiogeochemLittVertTransp(bounds, num_soilc, filter_soilc,            &
          active_layer_inst, soilbiogeochem_state_inst,                             &
          soilbiogeochem_carbonstate_inst, soilbiogeochem_carbonflux_inst,         &
+         shadow_soilbiogeochem_carbonstate_inst, shadow_soilbiogeochem_carbonflux_inst, &
          c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst, &
          c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst, &
          soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)
@@ -720,6 +743,11 @@ contains
     call CStateUpdate2(num_soilc, filter_soilc, num_soilp, filter_soilp, &
          cnveg_carbonflux_inst, cnveg_carbonstate_inst, soilbiogeochem_carbonstate_inst, &
          soilbiogeochem_carbonflux_inst)
+    if ( use_shadow_soilpools ) then
+       call CStateUpdate2(num_soilc, filter_soilc, num_soilp, filter_soilp, &
+            cnveg_carbonflux_inst, cnveg_carbonstate_inst, shadow_soilbiogeochem_carbonstate_inst, &
+            shadow_soilbiogeochem_carbonflux_inst, update_veg_inst=.false.)
+    end if
     if ( use_c13 ) then
        call CStateUpdate2(num_soilc, filter_soilc, num_soilp, filter_soilp, &
             c13_cnveg_carbonflux_inst, c13_cnveg_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
@@ -888,6 +916,12 @@ contains
     call CStateUpdate3( num_soilc, filter_soilc, num_soilp, filter_soilp, &
          cnveg_carbonflux_inst, cnveg_carbonstate_inst, soilbiogeochem_carbonstate_inst, &
          soilbiogeochem_carbonflux_inst)
+
+    if ( use_shadow_soilpools ) then
+       call CStateUpdate3( num_soilc, filter_soilc, num_soilp, filter_soilp, &
+            cnveg_carbonflux_inst, cnveg_carbonstate_inst, shadow_soilbiogeochem_carbonstate_inst, &
+            shadow_soilbiogeochem_carbonflux_inst, update_veg_inst=.false.)
+    end if
 
     if ( use_c13 ) then
        call CStateUpdate3( num_soilc, filter_soilc, num_soilp, filter_soilp, &

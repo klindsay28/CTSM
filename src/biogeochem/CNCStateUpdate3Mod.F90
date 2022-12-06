@@ -32,7 +32,7 @@ contains
   !-----------------------------------------------------------------------
   subroutine CStateUpdate3( num_soilc, filter_soilc, num_soilp, filter_soilp, &
        cnveg_carbonflux_inst, cnveg_carbonstate_inst, soilbiogeochem_carbonstate_inst,&
-       soilbiogeochem_carbonflux_inst)
+       soilbiogeochem_carbonflux_inst, update_veg_inst)
     !
     ! !DESCRIPTION:
     ! On the radiation time step, update all the prognostic carbon state
@@ -47,12 +47,20 @@ contains
     type(cnveg_carbonstate_type)           , intent(inout) :: cnveg_carbonstate_inst
     type(soilbiogeochem_carbonstate_type)  , intent(inout) :: soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)   , intent(inout) :: soilbiogeochem_carbonflux_inst
+    logical                     , optional , intent(in)    :: update_veg_inst ! TRUE => veg instances get updated
     !
     ! !LOCAL VARIABLES:
     integer :: c,p,j,l,k,i  ! indices
     integer :: fp,fc     ! lake filter indices
     real(r8):: dt        ! radiation time step (seconds)
+    logical :: l_update_veg_inst
     !-----------------------------------------------------------------------
+
+    if (present(update_veg_inst)) then
+       l_update_veg_inst = update_veg_inst
+    else
+       l_update_veg_inst = .true.
+    end if
 
     associate(                                      & 
          cf_veg => cnveg_carbonflux_inst ,          & ! Input
@@ -117,113 +125,115 @@ contains
          end do
       end if
 
-      ! patch-level carbon fluxes from fire
-      do fp = 1,num_soilp
-         p = filter_soilp(fp)
+      if (l_update_veg_inst) then
+         ! patch-level carbon fluxes from fire
+         do fp = 1,num_soilp
+            p = filter_soilp(fp)
 
-         cs_veg%gresp_storage_patch(p) = cs_veg%gresp_storage_patch(p) -           &
-              cf_veg%m_gresp_storage_to_fire_patch(p) * dt
-         cs_veg%gresp_storage_patch(p) = cs_veg%gresp_storage_patch(p) -           &
-              cf_veg%m_gresp_storage_to_litter_fire_patch(p) * dt
-         cs_veg%gresp_xfer_patch(p) = cs_veg%gresp_xfer_patch(p) -                 &
-              cf_veg%m_gresp_xfer_to_fire_patch(p) * dt
-         cs_veg%gresp_xfer_patch(p) = cs_veg%gresp_xfer_patch(p) -                 &
-              cf_veg%m_gresp_xfer_to_litter_fire_patch(p) * dt  
-         !
-         ! State update without the matrix solution
-         !
-         if(.not. use_matrixcn)then 
-            ! displayed pools
-            cs_veg%leafc_patch(p) = cs_veg%leafc_patch(p) -                           &
-              cf_veg%m_leafc_to_fire_patch(p) * dt
-            cs_veg%leafc_patch(p) = cs_veg%leafc_patch(p) -                           &
-              cf_veg%m_leafc_to_litter_fire_patch(p) * dt
-            cs_veg%frootc_patch(p) = cs_veg%frootc_patch(p) -                         &
-              cf_veg%m_frootc_to_fire_patch(p) * dt
-            cs_veg%frootc_patch(p) = cs_veg%frootc_patch(p) -                         &
-              cf_veg%m_frootc_to_litter_fire_patch(p) * dt
-            cs_veg%livestemc_patch(p) = cs_veg%livestemc_patch(p) -                   &
-              cf_veg%m_livestemc_to_fire_patch(p) * dt
-            cs_veg%livestemc_patch(p) = cs_veg%livestemc_patch(p) -                   &
-              cf_veg%m_livestemc_to_litter_fire_patch(p) * dt  -                   &
-              cf_veg%m_livestemc_to_deadstemc_fire_patch(p) * dt
-            cs_veg%deadstemc_patch(p) = cs_veg%deadstemc_patch(p) -                   &
-              cf_veg%m_deadstemc_to_fire_patch(p) * dt
-            cs_veg%deadstemc_patch(p) = cs_veg%deadstemc_patch(p) -                   &
-              cf_veg%m_deadstemc_to_litter_fire_patch(p) * dt  +                   &
-              cf_veg%m_livestemc_to_deadstemc_fire_patch(p) * dt
-            cs_veg%livecrootc_patch(p) = cs_veg%livecrootc_patch(p) -                 &
-              cf_veg%m_livecrootc_to_fire_patch(p) * dt
-            cs_veg%livecrootc_patch(p) = cs_veg%livecrootc_patch(p) -                 &
-              cf_veg%m_livecrootc_to_litter_fire_patch(p) * dt   -                 &
-              cf_veg%m_livecrootc_to_deadcrootc_fire_patch(p) * dt
-            cs_veg%deadcrootc_patch(p) = cs_veg%deadcrootc_patch(p) -                 &
-              cf_veg%m_deadcrootc_to_fire_patch(p) * dt
-            cs_veg%deadcrootc_patch(p) = cs_veg%deadcrootc_patch(p) -                 &
-              cf_veg%m_deadcrootc_to_litter_fire_patch(p)* dt    +                 &
-              cf_veg%m_livecrootc_to_deadcrootc_fire_patch(p) * dt
+            cs_veg%gresp_storage_patch(p) = cs_veg%gresp_storage_patch(p) -           &
+                 cf_veg%m_gresp_storage_to_fire_patch(p) * dt
+            cs_veg%gresp_storage_patch(p) = cs_veg%gresp_storage_patch(p) -           &
+                 cf_veg%m_gresp_storage_to_litter_fire_patch(p) * dt
+            cs_veg%gresp_xfer_patch(p) = cs_veg%gresp_xfer_patch(p) -                 &
+                 cf_veg%m_gresp_xfer_to_fire_patch(p) * dt
+            cs_veg%gresp_xfer_patch(p) = cs_veg%gresp_xfer_patch(p) -                 &
+                 cf_veg%m_gresp_xfer_to_litter_fire_patch(p) * dt  
+            !
+            ! State update without the matrix solution
+            !
+            if(.not. use_matrixcn)then 
+               ! displayed pools
+               cs_veg%leafc_patch(p) = cs_veg%leafc_patch(p) -                           &
+                 cf_veg%m_leafc_to_fire_patch(p) * dt
+               cs_veg%leafc_patch(p) = cs_veg%leafc_patch(p) -                           &
+                 cf_veg%m_leafc_to_litter_fire_patch(p) * dt
+               cs_veg%frootc_patch(p) = cs_veg%frootc_patch(p) -                         &
+                 cf_veg%m_frootc_to_fire_patch(p) * dt
+               cs_veg%frootc_patch(p) = cs_veg%frootc_patch(p) -                         &
+                 cf_veg%m_frootc_to_litter_fire_patch(p) * dt
+               cs_veg%livestemc_patch(p) = cs_veg%livestemc_patch(p) -                   &
+                 cf_veg%m_livestemc_to_fire_patch(p) * dt
+               cs_veg%livestemc_patch(p) = cs_veg%livestemc_patch(p) -                   &
+                 cf_veg%m_livestemc_to_litter_fire_patch(p) * dt  -                   &
+                 cf_veg%m_livestemc_to_deadstemc_fire_patch(p) * dt
+               cs_veg%deadstemc_patch(p) = cs_veg%deadstemc_patch(p) -                   &
+                 cf_veg%m_deadstemc_to_fire_patch(p) * dt
+               cs_veg%deadstemc_patch(p) = cs_veg%deadstemc_patch(p) -                   &
+                 cf_veg%m_deadstemc_to_litter_fire_patch(p) * dt  +                   &
+                 cf_veg%m_livestemc_to_deadstemc_fire_patch(p) * dt
+               cs_veg%livecrootc_patch(p) = cs_veg%livecrootc_patch(p) -                 &
+                 cf_veg%m_livecrootc_to_fire_patch(p) * dt
+               cs_veg%livecrootc_patch(p) = cs_veg%livecrootc_patch(p) -                 &
+                 cf_veg%m_livecrootc_to_litter_fire_patch(p) * dt   -                 &
+                 cf_veg%m_livecrootc_to_deadcrootc_fire_patch(p) * dt
+               cs_veg%deadcrootc_patch(p) = cs_veg%deadcrootc_patch(p) -                 &
+                 cf_veg%m_deadcrootc_to_fire_patch(p) * dt
+               cs_veg%deadcrootc_patch(p) = cs_veg%deadcrootc_patch(p) -                 &
+                 cf_veg%m_deadcrootc_to_litter_fire_patch(p)* dt    +                 &
+                 cf_veg%m_livecrootc_to_deadcrootc_fire_patch(p) * dt
 
-            ! storage pools
-            cs_veg%leafc_storage_patch(p) = cs_veg%leafc_storage_patch(p) -           &
-              cf_veg%m_leafc_storage_to_fire_patch(p) * dt
-            cs_veg%leafc_storage_patch(p) = cs_veg%leafc_storage_patch(p) -           &
-              cf_veg%m_leafc_storage_to_litter_fire_patch(p) * dt
-            cs_veg%frootc_storage_patch(p) = cs_veg%frootc_storage_patch(p) -         &
-              cf_veg%m_frootc_storage_to_fire_patch(p) * dt
-            cs_veg%frootc_storage_patch(p) = cs_veg%frootc_storage_patch(p) -         &
-              cf_veg%m_frootc_storage_to_litter_fire_patch(p) * dt
-            cs_veg%livestemc_storage_patch(p) = cs_veg%livestemc_storage_patch(p) -   &
-              cf_veg%m_livestemc_storage_to_fire_patch(p) * dt
-            cs_veg%livestemc_storage_patch(p) = cs_veg%livestemc_storage_patch(p) -   &
-              cf_veg%m_livestemc_storage_to_litter_fire_patch(p) * dt
-            cs_veg%deadstemc_storage_patch(p) = cs_veg%deadstemc_storage_patch(p) -   &
-              cf_veg%m_deadstemc_storage_to_fire_patch(p) * dt
-            cs_veg%deadstemc_storage_patch(p) = cs_veg%deadstemc_storage_patch(p) -   &
-              cf_veg%m_deadstemc_storage_to_litter_fire_patch(p) * dt
-            cs_veg%livecrootc_storage_patch(p) = cs_veg%livecrootc_storage_patch(p) - &
-              cf_veg%m_livecrootc_storage_to_fire_patch(p) * dt
-            cs_veg%livecrootc_storage_patch(p) = cs_veg%livecrootc_storage_patch(p) - &
-              cf_veg%m_livecrootc_storage_to_litter_fire_patch(p)* dt
-            cs_veg%deadcrootc_storage_patch(p) = cs_veg%deadcrootc_storage_patch(p) - &
-              cf_veg%m_deadcrootc_storage_to_fire_patch(p) * dt
-            cs_veg%deadcrootc_storage_patch(p) = cs_veg%deadcrootc_storage_patch(p) - &
-              cf_veg%m_deadcrootc_storage_to_litter_fire_patch(p)* dt
+               ! storage pools
+               cs_veg%leafc_storage_patch(p) = cs_veg%leafc_storage_patch(p) -           &
+                 cf_veg%m_leafc_storage_to_fire_patch(p) * dt
+               cs_veg%leafc_storage_patch(p) = cs_veg%leafc_storage_patch(p) -           &
+                 cf_veg%m_leafc_storage_to_litter_fire_patch(p) * dt
+               cs_veg%frootc_storage_patch(p) = cs_veg%frootc_storage_patch(p) -         &
+                 cf_veg%m_frootc_storage_to_fire_patch(p) * dt
+               cs_veg%frootc_storage_patch(p) = cs_veg%frootc_storage_patch(p) -         &
+                 cf_veg%m_frootc_storage_to_litter_fire_patch(p) * dt
+               cs_veg%livestemc_storage_patch(p) = cs_veg%livestemc_storage_patch(p) -   &
+                 cf_veg%m_livestemc_storage_to_fire_patch(p) * dt
+               cs_veg%livestemc_storage_patch(p) = cs_veg%livestemc_storage_patch(p) -   &
+                 cf_veg%m_livestemc_storage_to_litter_fire_patch(p) * dt
+               cs_veg%deadstemc_storage_patch(p) = cs_veg%deadstemc_storage_patch(p) -   &
+                 cf_veg%m_deadstemc_storage_to_fire_patch(p) * dt
+               cs_veg%deadstemc_storage_patch(p) = cs_veg%deadstemc_storage_patch(p) -   &
+                 cf_veg%m_deadstemc_storage_to_litter_fire_patch(p) * dt
+               cs_veg%livecrootc_storage_patch(p) = cs_veg%livecrootc_storage_patch(p) - &
+                 cf_veg%m_livecrootc_storage_to_fire_patch(p) * dt
+               cs_veg%livecrootc_storage_patch(p) = cs_veg%livecrootc_storage_patch(p) - &
+                 cf_veg%m_livecrootc_storage_to_litter_fire_patch(p)* dt
+               cs_veg%deadcrootc_storage_patch(p) = cs_veg%deadcrootc_storage_patch(p) - &
+                 cf_veg%m_deadcrootc_storage_to_fire_patch(p) * dt
+               cs_veg%deadcrootc_storage_patch(p) = cs_veg%deadcrootc_storage_patch(p) - &
+                 cf_veg%m_deadcrootc_storage_to_litter_fire_patch(p)* dt
 
-            ! transfer pools
-            cs_veg%leafc_xfer_patch(p) = cs_veg%leafc_xfer_patch(p) -                 &
-              cf_veg%m_leafc_xfer_to_fire_patch(p) * dt
-            cs_veg%leafc_xfer_patch(p) = cs_veg%leafc_xfer_patch(p) -                 &
-              cf_veg%m_leafc_xfer_to_litter_fire_patch(p) * dt
-            cs_veg%frootc_xfer_patch(p) = cs_veg%frootc_xfer_patch(p) -               &
-              cf_veg%m_frootc_xfer_to_fire_patch(p) * dt
-            cs_veg%frootc_xfer_patch(p) = cs_veg%frootc_xfer_patch(p) -               &
-              cf_veg%m_frootc_xfer_to_litter_fire_patch(p) * dt
-            cs_veg%livestemc_xfer_patch(p) = cs_veg%livestemc_xfer_patch(p) -         &
-              cf_veg%m_livestemc_xfer_to_fire_patch(p) * dt
-            cs_veg%livestemc_xfer_patch(p) = cs_veg%livestemc_xfer_patch(p) -         &
-              cf_veg%m_livestemc_xfer_to_litter_fire_patch(p) * dt
-            cs_veg%deadstemc_xfer_patch(p) = cs_veg%deadstemc_xfer_patch(p) -         &
-              cf_veg%m_deadstemc_xfer_to_fire_patch(p) * dt
-            cs_veg%deadstemc_xfer_patch(p) = cs_veg%deadstemc_xfer_patch(p) -         &
-              cf_veg%m_deadstemc_xfer_to_litter_fire_patch(p) * dt
-            cs_veg%livecrootc_xfer_patch(p) = cs_veg%livecrootc_xfer_patch(p) -       &
-              cf_veg%m_livecrootc_xfer_to_fire_patch(p) * dt
-            cs_veg%livecrootc_xfer_patch(p) = cs_veg%livecrootc_xfer_patch(p) -       &
-              cf_veg%m_livecrootc_xfer_to_litter_fire_patch(p)* dt
-            cs_veg%deadcrootc_xfer_patch(p) = cs_veg%deadcrootc_xfer_patch(p) -       &
-              cf_veg%m_deadcrootc_xfer_to_fire_patch(p) * dt
-            cs_veg%deadcrootc_xfer_patch(p) = cs_veg%deadcrootc_xfer_patch(p) -       &
-              cf_veg%m_deadcrootc_xfer_to_litter_fire_patch(p)* dt
-         !
-         ! For the matrix solution the actual state update comes after the matrix
-         ! multiply in VegMatrix, but the matrix needs to be setup with
-         ! the equivalent of above. Those changes can be here or in the
-         ! native subroutines dealing with that field
-         !
-         else
-            ! NOTE: The equivalent changes for matrix code are in CNFireBase and CNFireLi2014 codes EBK (11/26/2019)
-         end if !not use_matrixcn
-      end do ! end of patch loop
+               ! transfer pools
+               cs_veg%leafc_xfer_patch(p) = cs_veg%leafc_xfer_patch(p) -                 &
+                 cf_veg%m_leafc_xfer_to_fire_patch(p) * dt
+               cs_veg%leafc_xfer_patch(p) = cs_veg%leafc_xfer_patch(p) -                 &
+                 cf_veg%m_leafc_xfer_to_litter_fire_patch(p) * dt
+               cs_veg%frootc_xfer_patch(p) = cs_veg%frootc_xfer_patch(p) -               &
+                 cf_veg%m_frootc_xfer_to_fire_patch(p) * dt
+               cs_veg%frootc_xfer_patch(p) = cs_veg%frootc_xfer_patch(p) -               &
+                 cf_veg%m_frootc_xfer_to_litter_fire_patch(p) * dt
+               cs_veg%livestemc_xfer_patch(p) = cs_veg%livestemc_xfer_patch(p) -         &
+                 cf_veg%m_livestemc_xfer_to_fire_patch(p) * dt
+               cs_veg%livestemc_xfer_patch(p) = cs_veg%livestemc_xfer_patch(p) -         &
+                 cf_veg%m_livestemc_xfer_to_litter_fire_patch(p) * dt
+               cs_veg%deadstemc_xfer_patch(p) = cs_veg%deadstemc_xfer_patch(p) -         &
+                 cf_veg%m_deadstemc_xfer_to_fire_patch(p) * dt
+               cs_veg%deadstemc_xfer_patch(p) = cs_veg%deadstemc_xfer_patch(p) -         &
+                 cf_veg%m_deadstemc_xfer_to_litter_fire_patch(p) * dt
+               cs_veg%livecrootc_xfer_patch(p) = cs_veg%livecrootc_xfer_patch(p) -       &
+                 cf_veg%m_livecrootc_xfer_to_fire_patch(p) * dt
+               cs_veg%livecrootc_xfer_patch(p) = cs_veg%livecrootc_xfer_patch(p) -       &
+                 cf_veg%m_livecrootc_xfer_to_litter_fire_patch(p)* dt
+               cs_veg%deadcrootc_xfer_patch(p) = cs_veg%deadcrootc_xfer_patch(p) -       &
+                 cf_veg%m_deadcrootc_xfer_to_fire_patch(p) * dt
+               cs_veg%deadcrootc_xfer_patch(p) = cs_veg%deadcrootc_xfer_patch(p) -       &
+                 cf_veg%m_deadcrootc_xfer_to_litter_fire_patch(p)* dt
+            !
+            ! For the matrix solution the actual state update comes after the matrix
+            ! multiply in VegMatrix, but the matrix needs to be setup with
+            ! the equivalent of above. Those changes can be here or in the
+            ! native subroutines dealing with that field
+            !
+            else
+               ! NOTE: The equivalent changes for matrix code are in CNFireBase and CNFireLi2014 codes EBK (11/26/2019)
+            end if !not use_matrixcn
+         end do ! end of patch loop
+      end if ! end of if l_update_veg_inst
 
     end associate
 

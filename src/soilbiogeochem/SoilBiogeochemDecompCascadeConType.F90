@@ -56,6 +56,8 @@ module SoilBiogeochemDecompCascadeConType
   integer, public, parameter :: mimics_decomp = 2                      ! MIMICS decomposition method type
   integer, public            :: decomp_method  = ispval                ! Type of decomposition to use
   logical, public, parameter :: use_soil_matrixcn = .false.            ! true => use cn matrix solution for soil BGC
+  logical, public, parameter :: use_nk_solver_settings = .false.       ! true => use parameter settings for nk solver spinup
+  logical, public, parameter :: use_shadow_soilpools = .false.         ! true => use shadow copy of soil pools
   type(decomp_cascade_type), public :: decomp_cascade_con
   !------------------------------------------------------------------------
 

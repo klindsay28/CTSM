@@ -26,7 +26,8 @@ module SoilBiogeochemPrecisionControlMod
 contains
 
   !-----------------------------------------------------------------------
-  subroutine SoilBiogeochemPrecisionControlInit( soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
+  subroutine SoilBiogeochemPrecisionControlInit( soilbiogeochem_carbonstate_inst, &
+       shadow_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
        c14_soilbiogeochem_carbonstate_inst, soilbiogeochem_nitrogenstate_inst)
 
     !
@@ -35,9 +36,11 @@ contains
     !
     ! !USES:
     use clm_varctl , only : use_c13, use_c14
+    use SoilBiogeochemDecompCascadeConType , only : use_shadow_soilpools
     !
     ! !ARGUMENTS:
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: soilbiogeochem_carbonstate_inst
+    type(soilbiogeochem_carbonstate_type)   , intent(inout) :: shadow_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c13_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c14_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: soilbiogeochem_nitrogenstate_inst
@@ -49,6 +52,9 @@ contains
     ncrit    =  1.e-8_r8              ! critical nitrogen state value for truncation (gN/m2)
 
     call soilbiogeochem_carbonstate_inst%setTotVgCThresh( totvegcthresh )
+    if ( use_shadow_soilpools ) then
+       call shadow_soilbiogeochem_carbonstate_inst%setTotVgCThresh( totvegcthresh )
+    end if
     if ( use_c13 )then
         call c13_soilbiogeochem_carbonstate_inst%setTotVgCThresh( totvegcthresh )
     end if
@@ -62,7 +68,8 @@ contains
   !-----------------------------------------------------------------------
   subroutine SoilBiogeochemPrecisionControl(num_soilc, filter_soilc, &
        soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
-       c14_soilbiogeochem_carbonstate_inst, soilbiogeochem_nitrogenstate_inst)
+       c14_soilbiogeochem_carbonstate_inst, soilbiogeochem_nitrogenstate_inst, &
+       shadcs)
 
     !
     ! !DESCRIPTION: 
@@ -73,6 +80,7 @@ contains
     use clm_varctl , only : iulog, use_c13, use_c14, use_nitrif_denitrif, use_cn
     use clm_varpar , only : nlevdecomp
     use CNSharedParamsMod, only: use_fun
+    use SoilBiogeochemDecompCascadeConType , only : use_shadow_soilpools
     !
     ! !ARGUMENTS:
     integer                                 , intent(in)    :: num_soilc       ! number of soil columns in filter
@@ -81,11 +89,20 @@ contains
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c13_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c14_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: soilbiogeochem_nitrogenstate_inst
+    ! The following argument is named shadcs, instead of shadow_soilbiogeochem_carbonstate_inst,
+    ! and having shadcs => shadow_soilbiogeochem_carbonstate_inst in an associate construct,
+    ! because associate is not allowed to point to an optional argument that is not present.
+    ! The argument is optional to avoid needing to add the argument to
+    ! DynamicAreaConservation in biogeochem/CNVegetationFacade.F90 and
+    ! EDBGCDynSummary in biogeochem/EDBGCDynMod.F90,
+    ! which have calls to this subroutine.
+    type(soilbiogeochem_carbonstate_type)   , intent(inout), optional :: shadcs
     !
     ! !LOCAL VARIABLES:
     integer :: c,j,k ! indices
     integer :: fc    ! filter indices
     real(r8):: cc,cn ! truncation terms for column-level corrections
+    real(r8):: ccshad! truncation terms for column-level corrections
     real(r8):: cc13  ! truncation terms for column-level corrections
     real(r8):: cc14  ! truncation terms for column-level corrections
     !-----------------------------------------------------------------------
@@ -112,6 +129,7 @@ contains
          do j = 1,nlevdecomp
             ! initialize the column-level C and N truncation terms
             cc = 0._r8
+            if ( use_shadow_soilpools .and. present(shadcs) ) ccshad = 0._r8
             if ( use_c13 ) cc13 = 0._r8
             if ( use_c14 ) cc14 = 0._r8
             cn = 0._r8
@@ -133,6 +151,10 @@ contains
                      ns%decomp_npools_vr_col(c,j,k) = 0._r8
                   endif
 
+                  if ( use_shadow_soilpools .and. present(shadcs) ) then
+                     ccshad = ccshad + shadcs%decomp_cpools_vr_col(c,j,k)
+                     shadcs%decomp_cpools_vr_col(c,j,k) = 0._r8
+                  endif
                   if ( use_c13 ) then
                      cc13 = cc13 + c13cs%decomp_cpools_vr_col(c,j,k)
                      c13cs%decomp_cpools_vr_col(c,j,k) = 0._r8
@@ -152,6 +174,9 @@ contains
 
             if (use_cn) then
                ns%ntrunc_vr_col(c,j) = ns%ntrunc_vr_col(c,j) + cn
+            endif
+            if ( use_shadow_soilpools .and. present(shadcs) ) then
+               shadcs%ctrunc_vr_col(c,j) = shadcs%ctrunc_vr_col(c,j) + ccshad
             endif
             if ( use_c13 ) then
                c13cs%ctrunc_vr_col(c,j) = c13cs%ctrunc_vr_col(c,j) + cc13

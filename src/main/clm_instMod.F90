@@ -12,6 +12,7 @@ module clm_instMod
   use clm_varctl      , only : iulog
   use clm_varctl      , only : use_crop, snow_cover_fraction_method, paramfile
   use SoilBiogeochemDecompCascadeConType , only : mimics_decomp, no_soil_decomp, century_decomp, decomp_method
+  use SoilBiogeochemDecompCascadeConType , only : use_shadow_soilpools
   use clm_varcon      , only : bdsno, c13ratio, c14ratio
   use landunit_varcon , only : istice, istsoil
   use perf_mod        , only : t_startf, t_stopf
@@ -140,9 +141,11 @@ module clm_instMod
   ! Soil biogeochem types 
   type(soilbiogeochem_state_type)        , public :: soilbiogeochem_state_inst
   type(soilbiogeochem_carbonstate_type)  , public :: soilbiogeochem_carbonstate_inst
+  type(soilbiogeochem_carbonstate_type)  , public :: shadow_soilbiogeochem_carbonstate_inst
   type(soilbiogeochem_carbonstate_type)  , public :: c13_soilbiogeochem_carbonstate_inst
   type(soilbiogeochem_carbonstate_type)  , public :: c14_soilbiogeochem_carbonstate_inst
   type(soilbiogeochem_carbonflux_type)   , public :: soilbiogeochem_carbonflux_inst
+  type(soilbiogeochem_carbonflux_type)   , public :: shadow_soilbiogeochem_carbonflux_inst
   type(soilbiogeochem_carbonflux_type)   , public :: c13_soilbiogeochem_carbonflux_inst
   type(soilbiogeochem_carbonflux_type)   , public :: c14_soilbiogeochem_carbonflux_inst
   type(soilbiogeochem_nitrogenstate_type), public :: soilbiogeochem_nitrogenstate_inst
@@ -393,6 +396,10 @@ contains
        ! Initalize soilbiogeochem carbon types
 
        call soilbiogeochem_carbonstate_inst%Init(bounds, carbon_type='c12', ratio=1._r8)
+       if (use_shadow_soilpools) then
+          call shadow_soilbiogeochem_carbonstate_inst%Init(bounds, carbon_type='shadow_c12', ratio=1._r8, &
+               c12_soilbiogeochem_carbonstate_inst=soilbiogeochem_carbonstate_inst)
+       end if
        if (use_c13) then
           call c13_soilbiogeochem_carbonstate_inst%Init(bounds, carbon_type='c13', ratio=c13ratio, &
                c12_soilbiogeochem_carbonstate_inst=soilbiogeochem_carbonstate_inst)
@@ -403,6 +410,9 @@ contains
        end if
 
        call soilbiogeochem_carbonflux_inst%Init(bounds, carbon_type='c12') 
+       if (use_shadow_soilpools) then
+          call shadow_soilbiogeochem_carbonflux_inst%Init(bounds, carbon_type='shadow_c12')
+       end if
        if (use_c13) then
           call c13_soilbiogeochem_carbonflux_inst%Init(bounds, carbon_type='c13')
        end if
@@ -420,8 +430,9 @@ contains
        call soilbiogeochem_nitrogenflux_inst%Init(bounds) 
 
        ! Initialize precision control for soil biogeochemistry
-       call SoilBiogeochemPrecisionControlInit( soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
-                                                c14_soilbiogeochem_carbonstate_inst, soilbiogeochem_nitrogenstate_inst)
+       call SoilBiogeochemPrecisionControlInit( soilbiogeochem_carbonstate_inst, &
+            shadow_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
+            c14_soilbiogeochem_carbonstate_inst, soilbiogeochem_nitrogenstate_inst)
 
     end if ! end of if use_cn 
 
@@ -567,6 +578,11 @@ contains
        call soilbiogeochem_carbonstate_inst%restart(bounds, ncid, flag=flag, carbon_type='c12', &
             totvegc_col=bgc_vegetation_inst%get_totvegc_col(bounds))
 
+       if (use_shadow_soilpools) then
+          call shadow_soilbiogeochem_carbonstate_inst%restart(bounds, ncid, flag=flag, carbon_type='shadow_c12', &
+               totvegc_col=bgc_vegetation_inst%get_totvegc_col(bounds), &
+               c12_soilbiogeochem_carbonstate_inst=soilbiogeochem_carbonstate_inst)
+       end if
        if (use_c13) then
           call c13_soilbiogeochem_carbonstate_inst%restart(bounds, ncid, flag=flag, carbon_type='c13', &
                totvegc_col=bgc_vegetation_inst%get_totvegc_col(bounds), &

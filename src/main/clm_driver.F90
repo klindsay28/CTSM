@@ -1009,6 +1009,7 @@ contains
                   filter(nc)%num_exposedvegp, filter(nc)%exposedvegp, &
                   filter(nc)%num_noexposedvegp, filter(nc)%noexposedvegp, &
                soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst,         &
+               shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst, &
                c13_soilbiogeochem_carbonflux_inst, c13_soilbiogeochem_carbonstate_inst, &
                c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst, &
                soilbiogeochem_state_inst,                                               &
@@ -1091,6 +1092,7 @@ contains
                water_inst%waterstatebulk_inst, water_inst%waterdiagnosticbulk_inst, &
                water_inst%waterfluxbulk_inst, frictionvel_inst, canopystate_inst, &
                soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst, &
+               shadow_soilbiogeochem_carbonstate_inst, &
                c13_soilbiogeochem_carbonflux_inst, c13_soilbiogeochem_carbonstate_inst, &
                c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst, &
                soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst)
@@ -1115,6 +1117,7 @@ contains
                bgc_vegetation_inst%cnveg_carbonflux_inst, &
                bgc_vegetation_inst%cnveg_carbonstate_inst, &
                soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst,                    &
+               shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst,      &
                soilbiogeochem_state_inst, clm_fates,                                               &
                soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst,                &
                c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst,            &

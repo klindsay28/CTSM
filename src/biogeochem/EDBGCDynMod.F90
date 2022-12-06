@@ -46,6 +46,7 @@ contains
        num_soilc, filter_soilc, num_soilp, filter_soilp, num_pcropp, filter_pcropp, doalb, &
        cnveg_carbonflux_inst, cnveg_carbonstate_inst,                                      &
        soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst,                    &
+       shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst,      &
        soilbiogeochem_state_inst, clm_fates,                                               &
        soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst,                &
        c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst,            &
@@ -96,6 +97,8 @@ contains
     type(soilbiogeochem_state_type)         , intent(inout) :: soilbiogeochem_state_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: soilbiogeochem_carbonstate_inst
+    type(soilbiogeochem_carbonflux_type)    , intent(inout) :: shadow_soilbiogeochem_carbonflux_inst
+    type(soilbiogeochem_carbonstate_type)   , intent(inout) :: shadow_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c13_soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c13_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c14_soilbiogeochem_carbonflux_inst
@@ -253,6 +256,7 @@ contains
        call SoilBiogeochemLittVertTransp(bounds, num_soilc, filter_soilc,            &
             active_layer_inst, soilbiogeochem_state_inst,                            &
             soilbiogeochem_carbonstate_inst, soilbiogeochem_carbonflux_inst,         &
+            shadow_soilbiogeochem_carbonstate_inst, shadow_soilbiogeochem_carbonflux_inst, &
             c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst, &
             c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst, &
             soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)

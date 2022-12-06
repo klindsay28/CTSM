@@ -888,6 +888,7 @@ contains
        num_exposedvegp, filter_exposedvegp, &
        num_noexposedvegp, filter_noexposedvegp, &
        soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst,         &
+       shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst, &
        c13_soilbiogeochem_carbonflux_inst, c13_soilbiogeochem_carbonstate_inst, &
        c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst, &
        soilbiogeochem_state_inst,                                               &
@@ -929,6 +930,8 @@ contains
     type(soilbiogeochem_state_type)         , intent(inout) :: soilbiogeochem_state_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: soilbiogeochem_carbonstate_inst
+    type(soilbiogeochem_carbonflux_type)    , intent(inout) :: shadow_soilbiogeochem_carbonflux_inst
+    type(soilbiogeochem_carbonstate_type)   , intent(inout) :: shadow_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c13_soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c13_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c14_soilbiogeochem_carbonflux_inst
@@ -978,6 +981,7 @@ contains
          this%c_products_inst, this%c13_products_inst, this%c14_products_inst,    &
          this%n_products_inst,                                                    &
          soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst,         &
+         shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst, &
          c13_soilbiogeochem_carbonflux_inst, c13_soilbiogeochem_carbonstate_inst, &
          c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst, &
          soilbiogeochem_state_inst,                                               &
@@ -1006,6 +1010,7 @@ contains
        doalb, crop_inst, soilstate_inst, soilbiogeochem_state_inst, &
        waterstatebulk_inst, waterdiagnosticbulk_inst, waterfluxbulk_inst, frictionvel_inst, canopystate_inst, &
        soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst, &
+       shadow_soilbiogeochem_carbonstate_inst, &
        c13_soilbiogeochem_carbonflux_inst, c13_soilbiogeochem_carbonstate_inst, &
        c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst, &
        soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst)
@@ -1041,6 +1046,7 @@ contains
     type(soilbiogeochem_state_type)         , intent(inout) :: soilbiogeochem_state_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: soilbiogeochem_carbonstate_inst
+    type(soilbiogeochem_carbonstate_type)   , intent(inout) :: shadow_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c13_soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c13_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c14_soilbiogeochem_carbonflux_inst
@@ -1082,7 +1088,8 @@ contains
     call t_startf('SoilBiogeochemPrecisionControl')
     call SoilBiogeochemPrecisionControl(num_soilc, filter_soilc,  &
          soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
-         c14_soilbiogeochem_carbonstate_inst,soilbiogeochem_nitrogenstate_inst)
+         c14_soilbiogeochem_carbonstate_inst,soilbiogeochem_nitrogenstate_inst, &
+         shadow_soilbiogeochem_carbonstate_inst)
     call t_stopf('SoilBiogeochemPrecisionControl')
 
     ! Call to all CN summary routines

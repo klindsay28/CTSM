@@ -16,6 +16,7 @@ module SoilBiogeochemLittVertTranspMod
   use SoilBiogeochemNitrogenFluxType     , only : soilbiogeochem_nitrogenflux_type
   use SoilBiogeochemNitrogenStateType    , only : soilbiogeochem_nitrogenstate_type
   use SoilBiogeochemDecompCascadeConType , only : decomp_cascade_con, use_soil_matrixcn
+  use SoilBiogeochemDecompCascadeConType , only : use_shadow_soilpools
   use ColumnType                         , only : col                
   use GridcellType                       , only : grc
   use SoilBiogeochemStateType            , only : get_spinup_latitude_term
@@ -84,6 +85,7 @@ contains
   subroutine SoilBiogeochemLittVertTransp(bounds, num_soilc, filter_soilc,      &
        active_layer_inst, soilbiogeochem_state_inst,                     &
        soilbiogeochem_carbonstate_inst, soilbiogeochem_carbonflux_inst, &
+       shadow_soilbiogeochem_carbonstate_inst, shadow_soilbiogeochem_carbonflux_inst, &
        c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst, &
        c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst, &
        soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)
@@ -111,6 +113,8 @@ contains
     type(soilbiogeochem_state_type)         , intent(inout) :: soilbiogeochem_state_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: soilbiogeochem_carbonflux_inst
+    type(soilbiogeochem_carbonstate_type)   , intent(inout) :: shadow_soilbiogeochem_carbonstate_inst
+    type(soilbiogeochem_carbonflux_type)    , intent(inout) :: shadow_soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c13_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c13_soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c14_soilbiogeochem_carbonstate_inst
@@ -142,6 +146,9 @@ contains
     real(r8) :: deficit
     integer  :: ntype
     integer  :: i_type,s,fc,c,j,l,i                                                ! indices
+    integer  :: i_type_cshadow                                                     ! i_type value for shadow c pools
+    integer  :: i_type_c13                                                         ! i_type value for c13 pools
+    integer  :: i_type_c14                                                         ! i_type value for c14 pools
     integer  :: jtop(bounds%begc:bounds%endc)                                      ! top level at each column
     real(r8) :: dtime                                                              ! land model time step (sec)
     integer  :: zerolev_diffus
@@ -176,11 +183,23 @@ contains
       dtime = get_step_size_real()
 
       ntype = 2
+      if ( use_shadow_soilpools ) then
+         ntype = ntype + 1
+         i_type_cshadow = ntype
+      else
+         i_type_cshadow = -1
+      endif
       if ( use_c13 ) then
-         ntype = ntype+1
+         ntype = ntype + 1
+         i_type_c13 = ntype
+      else
+         i_type_c13 = -1
       endif
       if ( use_c14 ) then
-         ntype = ntype+1
+         ntype = ntype + 1
+         i_type_c14 = ntype
+      else
+         i_type_c14 = -1
       endif
       if ( use_fates ) then
          ntype = 1
@@ -241,40 +260,33 @@ contains
       do i_type = 1, ntype
 
          ! For matrix solution figure out which matrix data to point to
-         select case (i_type)
-         case (1)  ! C
+         if (i_type == 1) then
             conc_ptr          => soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
             source            => soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
             trcr_tendency_ptr => soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
-         case (2)  ! N
+         end if
+         if (i_type == 2) then
             if (use_cn ) then
                conc_ptr          => soilbiogeochem_nitrogenstate_inst%decomp_npools_vr_col
                source            => soilbiogeochem_nitrogenflux_inst%decomp_npools_sourcesink_col
                trcr_tendency_ptr => soilbiogeochem_nitrogenflux_inst%decomp_npools_transport_tendency_col
-            endif
-         case (3)
-            if ( use_c13 ) then
-               ! C13
-               conc_ptr          => c13_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
-               source            => c13_soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
-               trcr_tendency_ptr => c13_soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
-            else
-               ! C14
-               conc_ptr          => c14_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
-               source            => c14_soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
-               trcr_tendency_ptr => c14_soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
-            endif
-         case (4)
-            if ( use_c14 .and. use_c13 ) then
-               ! C14
-               conc_ptr          => c14_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
-               source            => c14_soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
-               trcr_tendency_ptr => c14_soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
-            else
-               write(iulog,*) 'error.  ncase = 4, but c13 and c14 not both enabled.'
-               call endrun(msg=errMsg(sourcefile, __LINE__))
-            endif
-         end select
+            end if
+         end if
+         if (i_type == i_type_cshadow) then
+            conc_ptr          => shadow_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
+            source            => shadow_soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
+            trcr_tendency_ptr => shadow_soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
+         end if
+         if (i_type == i_type_c13) then
+            conc_ptr          => c13_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
+            source            => c13_soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
+            trcr_tendency_ptr => c13_soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
+         end if
+         if (i_type == i_type_c14) then
+            conc_ptr          => c14_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
+            source            => c14_soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
+            trcr_tendency_ptr => c14_soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
+         end if
 
          do s = 1, ndecomp_pools
             if ( .not. is_cwd(s) ) then
