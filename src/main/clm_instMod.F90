@@ -397,8 +397,7 @@ contains
 
        call soilbiogeochem_carbonstate_inst%Init(bounds, carbon_type='c12', ratio=1._r8)
        if (use_shadow_soilpools) then
-          call shadow_soilbiogeochem_carbonstate_inst%Init(bounds, carbon_type='shadow_c12', ratio=1._r8, &
-               c12_soilbiogeochem_carbonstate_inst=soilbiogeochem_carbonstate_inst)
+          call shadow_soilbiogeochem_carbonstate_inst%Init(bounds, carbon_type='shadow_c12', ratio=1._r8)
        end if
        if (use_c13) then
           call c13_soilbiogeochem_carbonstate_inst%Init(bounds, carbon_type='c13', ratio=c13ratio, &
