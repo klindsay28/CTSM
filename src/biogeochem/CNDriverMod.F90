@@ -650,7 +650,7 @@ contains
 
     ! Set the shadow carbon flux variables (except for gap-phase mortality and fire fluxes)
     if ( use_shadow_soilpools ) then
-       call NShadowFlux1(num_soilc, filter_soilc, &
+       call NShadowFlux1(num_soilc, filter_soilc, shadow_soilbiogeochem_carbonflux_inst, &
             soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst, &
             shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst)
     end if
