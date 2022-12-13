@@ -33,7 +33,7 @@ contains
   !-----------------------------------------------------------------------
   subroutine NStateUpdate2(num_soilc, filter_soilc, num_soilp, filter_soilp, &
        cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, soilbiogeochem_nitrogenstate_inst, &
-       soilbiogeochem_nitrogenflux_inst)
+       soilbiogeochem_nitrogenflux_inst, update_veg_inst)
     !
     ! !DESCRIPTION:
     ! On the radiation time step, update all the prognostic nitrogen state
@@ -50,12 +50,19 @@ contains
     type(cnveg_nitrogenstate_type)          , intent(inout) :: cnveg_nitrogenstate_inst
     type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: soilbiogeochem_nitrogenflux_inst
     type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: soilbiogeochem_nitrogenstate_inst
-    !
+    logical                      , optional , intent(in)    :: update_veg_inst ! TRUE => veg instances     !
     ! !LOCAL VARIABLES:
     integer  :: c,p,j,l,i  ! indices
     integer  :: fp,fc   ! lake filter indices
     real(r8) :: dt      ! radiation time step (seconds)
+    logical :: l_update_veg_inst
     !-----------------------------------------------------------------------
+
+    if (present(update_veg_inst)) then
+       l_update_veg_inst = update_veg_inst
+    else
+       l_update_veg_inst = .true.
+    end if
 
     associate(                                        & 
          nf_veg => cnveg_nitrogenflux_inst          , &
@@ -102,69 +109,71 @@ contains
          end do
       end do
 
-      ! patch -level nitrogen fluxes from gap-phase mortality
+      if (l_update_veg_inst) then
+         ! patch -level nitrogen fluxes from gap-phase mortality
 
-      do fp = 1,num_soilp
-         p = filter_soilp(fp)
+         do fp = 1,num_soilp
+            p = filter_soilp(fp)
 
-         !
-         ! State update without the matrix solution
-         !
-         if(.not.  use_matrixcn)then
-            ! displayed pools
-            ns_veg%leafn_patch(p) =  ns_veg%leafn_patch(p)                           &
-              - nf_veg%m_leafn_to_litter_patch(p) * dt
-            ns_veg%frootn_patch(p) =  ns_veg%frootn_patch(p)                         &
-              - nf_veg%m_frootn_to_litter_patch(p) * dt
-            ns_veg%livestemn_patch(p) =  ns_veg%livestemn_patch(p)                   &
-              - nf_veg%m_livestemn_to_litter_patch(p) * dt
-            ns_veg%deadstemn_patch(p) =  ns_veg%deadstemn_patch(p)                   &
-              - nf_veg%m_deadstemn_to_litter_patch(p) * dt
-            ns_veg%livecrootn_patch(p) =  ns_veg%livecrootn_patch(p)                 &
-              - nf_veg%m_livecrootn_to_litter_patch(p) * dt
-            ns_veg%deadcrootn_patch(p) =  ns_veg%deadcrootn_patch(p)                 &
-              - nf_veg%m_deadcrootn_to_litter_patch(p) * dt
-            ns_veg%retransn_patch(p) =  ns_veg%retransn_patch(p)                     &
-              - nf_veg%m_retransn_to_litter_patch(p) * dt
+            !
+            ! State update without the matrix solution
+            !
+            if(.not.  use_matrixcn)then
+               ! displayed pools
+               ns_veg%leafn_patch(p) =  ns_veg%leafn_patch(p)                           &
+                 - nf_veg%m_leafn_to_litter_patch(p) * dt
+               ns_veg%frootn_patch(p) =  ns_veg%frootn_patch(p)                         &
+                 - nf_veg%m_frootn_to_litter_patch(p) * dt
+               ns_veg%livestemn_patch(p) =  ns_veg%livestemn_patch(p)                   &
+                 - nf_veg%m_livestemn_to_litter_patch(p) * dt
+               ns_veg%deadstemn_patch(p) =  ns_veg%deadstemn_patch(p)                   &
+                 - nf_veg%m_deadstemn_to_litter_patch(p) * dt
+               ns_veg%livecrootn_patch(p) =  ns_veg%livecrootn_patch(p)                 &
+                 - nf_veg%m_livecrootn_to_litter_patch(p) * dt
+               ns_veg%deadcrootn_patch(p) =  ns_veg%deadcrootn_patch(p)                 &
+                 - nf_veg%m_deadcrootn_to_litter_patch(p) * dt
+               ns_veg%retransn_patch(p) =  ns_veg%retransn_patch(p)                     &
+                 - nf_veg%m_retransn_to_litter_patch(p) * dt
 
-            ! storage pools
-            ns_veg%leafn_storage_patch(p) =  ns_veg%leafn_storage_patch(p)           &
-              - nf_veg%m_leafn_storage_to_litter_patch(p) * dt
-            ns_veg%frootn_storage_patch(p) =  ns_veg%frootn_storage_patch(p)         &
-              - nf_veg%m_frootn_storage_to_litter_patch(p) * dt
-            ns_veg%livestemn_storage_patch(p) =  ns_veg%livestemn_storage_patch(p)   &
-              - nf_veg%m_livestemn_storage_to_litter_patch(p) * dt
-            ns_veg%deadstemn_storage_patch(p) =  ns_veg%deadstemn_storage_patch(p)   &
-              - nf_veg%m_deadstemn_storage_to_litter_patch(p) * dt
-            ns_veg%livecrootn_storage_patch(p) =  ns_veg%livecrootn_storage_patch(p) &
-              - nf_veg%m_livecrootn_storage_to_litter_patch(p) * dt
-            ns_veg%deadcrootn_storage_patch(p) =  ns_veg%deadcrootn_storage_patch(p) &
-              - nf_veg%m_deadcrootn_storage_to_litter_patch(p) * dt
+               ! storage pools
+               ns_veg%leafn_storage_patch(p) =  ns_veg%leafn_storage_patch(p)           &
+                 - nf_veg%m_leafn_storage_to_litter_patch(p) * dt
+               ns_veg%frootn_storage_patch(p) =  ns_veg%frootn_storage_patch(p)         &
+                 - nf_veg%m_frootn_storage_to_litter_patch(p) * dt
+               ns_veg%livestemn_storage_patch(p) =  ns_veg%livestemn_storage_patch(p)   &
+                 - nf_veg%m_livestemn_storage_to_litter_patch(p) * dt
+               ns_veg%deadstemn_storage_patch(p) =  ns_veg%deadstemn_storage_patch(p)   &
+                 - nf_veg%m_deadstemn_storage_to_litter_patch(p) * dt
+               ns_veg%livecrootn_storage_patch(p) =  ns_veg%livecrootn_storage_patch(p) &
+                 - nf_veg%m_livecrootn_storage_to_litter_patch(p) * dt
+               ns_veg%deadcrootn_storage_patch(p) =  ns_veg%deadcrootn_storage_patch(p) &
+                 - nf_veg%m_deadcrootn_storage_to_litter_patch(p) * dt
 
-            ! transfer pools
-            ns_veg%leafn_xfer_patch(p) =  ns_veg%leafn_xfer_patch(p)                 &
-              - nf_veg%m_leafn_xfer_to_litter_patch(p) * dt
-            ns_veg%frootn_xfer_patch(p) =  ns_veg%frootn_xfer_patch(p)               &
-              - nf_veg%m_frootn_xfer_to_litter_patch(p) * dt
-            ns_veg%livestemn_xfer_patch(p) =  ns_veg%livestemn_xfer_patch(p)         &
-              - nf_veg%m_livestemn_xfer_to_litter_patch(p) * dt
-            ns_veg%deadstemn_xfer_patch(p) =  ns_veg%deadstemn_xfer_patch(p)         &
-              - nf_veg%m_deadstemn_xfer_to_litter_patch(p) * dt
-            ns_veg%livecrootn_xfer_patch(p) =  ns_veg%livecrootn_xfer_patch(p)       &
-              - nf_veg%m_livecrootn_xfer_to_litter_patch(p) * dt
-            ns_veg%deadcrootn_xfer_patch(p) =  ns_veg%deadcrootn_xfer_patch(p)       &
-              - nf_veg%m_deadcrootn_xfer_to_litter_patch(p) * dt
+               ! transfer pools
+               ns_veg%leafn_xfer_patch(p) =  ns_veg%leafn_xfer_patch(p)                 &
+                 - nf_veg%m_leafn_xfer_to_litter_patch(p) * dt
+               ns_veg%frootn_xfer_patch(p) =  ns_veg%frootn_xfer_patch(p)               &
+                 - nf_veg%m_frootn_xfer_to_litter_patch(p) * dt
+               ns_veg%livestemn_xfer_patch(p) =  ns_veg%livestemn_xfer_patch(p)         &
+                 - nf_veg%m_livestemn_xfer_to_litter_patch(p) * dt
+               ns_veg%deadstemn_xfer_patch(p) =  ns_veg%deadstemn_xfer_patch(p)         &
+                 - nf_veg%m_deadstemn_xfer_to_litter_patch(p) * dt
+               ns_veg%livecrootn_xfer_patch(p) =  ns_veg%livecrootn_xfer_patch(p)       &
+                 - nf_veg%m_livecrootn_xfer_to_litter_patch(p) * dt
+               ns_veg%deadcrootn_xfer_patch(p) =  ns_veg%deadcrootn_xfer_patch(p)       &
+                 - nf_veg%m_deadcrootn_xfer_to_litter_patch(p) * dt
 
-         !
-         ! For the matrix solution the actual state update comes after the matrix
-         ! multiply in VegMatrix, but the matrix needs to be setup with
-         ! the equivalent of above. Those changes can be here or in the
-         ! native subroutines dealing with that field
-         !
-         else
-            ! NOTE: The equivalent changes for matrix code are in dynHarvest::CNHarvest EBK (11/26/2019)
-         end if !not use_matrixcn
-      end do
+            !
+            ! For the matrix solution the actual state update comes after the matrix
+            ! multiply in VegMatrix, but the matrix needs to be setup with
+            ! the equivalent of above. Those changes can be here or in the
+            ! native subroutines dealing with that field
+            !
+            else
+               ! NOTE: The equivalent changes for matrix code are in dynHarvest::CNHarvest EBK (11/26/2019)
+            end if !not use_matrixcn
+         end do
+      end if ! end of if l_update_veg_inst
 
     end associate
 

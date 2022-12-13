@@ -58,6 +58,7 @@ module SoilBiogeochemNitrogenStateType
      ! the N balance check
      real(r8), pointer :: dyn_no3bal_adjustments_col (:) ! (gN/m2) NO3 adjustments to each column made in this timestep via dynamic column area adjustments (only makes sense at the column-level: meaningless if averaged to the gridcell-level)
      real(r8), pointer :: dyn_nh4bal_adjustments_col (:) ! (gN/m2) NH4 adjustments to each column made in this timestep via dynamic column adjustments (only makes sense at the column-level: meaningless if averaged to the gridcell-level)
+     integer           :: restart_file_spinup_state      ! spinup state as read from restart file, for determining whether to enter or exit spinup mode.
      real(r8)          :: totvegcthresh                  ! threshold for total vegetation carbon to zero out decomposition pools
 
      ! Matrix-cn
@@ -84,18 +85,19 @@ contains
 
   !------------------------------------------------------------------------
   subroutine Init(this, bounds,                           &
-       decomp_cpools_vr_col, decomp_cpools_col, decomp_cpools_1m_col)
+       decomp_cpools_vr_col, decomp_cpools_col, decomp_cpools_1m_col, nitrogen_type)
 
     class(soilbiogeochem_nitrogenstate_type)         :: this
     type(bounds_type) , intent(in)    :: bounds  
     real(r8)          , intent(in)    :: decomp_cpools_vr_col (bounds%begc:, 1:, 1:)
     real(r8)          , intent(in)    :: decomp_cpools_col    (bounds%begc:, 1:)
     real(r8)          , intent(in)    :: decomp_cpools_1m_col (bounds%begc:, 1:)
+    character(len=*)  , intent(in)    :: nitrogen_type
 
     this%totvegcthresh = nan
     call this%InitAllocate (bounds )
 
-    call this%InitHistory (bounds)
+    call this%InitHistory (bounds, nitrogen_type)
 
     call this%InitCold ( bounds, & 
          decomp_cpools_vr_col, decomp_cpools_col, decomp_cpools_1m_col)
@@ -144,10 +146,12 @@ contains
     allocate(this%decomp_soiln_vr_col(begc:endc,1:nlevdecomp_full))
     this%decomp_soiln_vr_col(:,:)= nan
 
+    this%restart_file_spinup_state = huge(1)
+
   end subroutine InitAllocate
 
   !------------------------------------------------------------------------
-  subroutine InitHistory(this, bounds)
+  subroutine InitHistory(this, bounds, nitrogen_type)
     !
     ! !DESCRIPTION:
     ! add history fields for all CN variables, always set as default='inactive'
@@ -161,6 +165,7 @@ contains
     ! !ARGUMENTS:
     class(soilbiogeochem_nitrogenstate_type) :: this
     type(bounds_type)         , intent(in) :: bounds 
+    character(len=*)          , intent(in) :: nitrogen_type
     !
     ! !LOCAL VARIABLES:
     integer           :: k,l,ii,jj 
@@ -175,158 +180,175 @@ contains
 
     begc = bounds%begc; endc = bounds%endc
 
-    if ( nlevdecomp_full > 1 ) then
-       this%decomp_soiln_vr_col(begc:endc,1:nlevdecomp_full) = spval
-       call hist_addfld2d (fname='SOILN_vr', units='gN/m^3',  type2d='levdcmp', &
-            avgflag='A', long_name='SOIL N (vertically resolved)', &
-            ptr_col=this%decomp_soiln_vr_col)
-    end if
+    if ( nitrogen_type == 'base' ) then
+       if ( nlevdecomp_full > 1 ) then
+          this%decomp_soiln_vr_col(begc:endc,1:nlevdecomp_full) = spval
+          call hist_addfld2d (fname='SOILN_vr', units='gN/m^3',  type2d='levdcmp', &
+               avgflag='A', long_name='SOIL N (vertically resolved)', &
+               ptr_col=this%decomp_soiln_vr_col)
+       end if
 
-    if ( nlevdecomp_full > 1 ) then
-       this%decomp_npools_vr_col(begc:endc,:,:) = spval
-       this%decomp_npools_1m_col(begc:endc,:) = spval
+       if ( nlevdecomp_full > 1 ) then
+          this%decomp_npools_vr_col(begc:endc,:,:) = spval
+          this%decomp_npools_1m_col(begc:endc,:) = spval
+          if(use_soil_matrixcn)then
+          end if
+       end if
+       this%decomp_npools_col(begc:endc,:) = spval
        if(use_soil_matrixcn)then
        end if
-    end if
-    this%decomp_npools_col(begc:endc,:) = spval
-    if(use_soil_matrixcn)then
-    end if
-    do l  = 1, ndecomp_pools
-       if ( nlevdecomp_full > 1 ) then
-          data2dptr => this%decomp_npools_vr_col(:,1:nlevdecomp_full,l)
-          fieldname = trim(decomp_cascade_con%decomp_pool_name_history(l))//'N_vr'
-          longname =  trim(decomp_cascade_con%decomp_pool_name_history(l))//' N (vertically resolved)'
-          call hist_addfld2d (fname=fieldname, units='gN/m^3',  type2d='levdcmp', &
-               avgflag='A', long_name=longname, &
-               ptr_col=data2dptr)
-          if(use_soil_matrixcn)then
-          end if
-       endif
+       do l  = 1, ndecomp_pools
+          if ( nlevdecomp_full > 1 ) then
+             data2dptr => this%decomp_npools_vr_col(:,1:nlevdecomp_full,l)
+             fieldname = trim(decomp_cascade_con%decomp_pool_name_history(l))//'N_vr'
+             longname =  trim(decomp_cascade_con%decomp_pool_name_history(l))//' N (vertically resolved)'
+             call hist_addfld2d (fname=fieldname, units='gN/m^3',  type2d='levdcmp', &
+                  avgflag='A', long_name=longname, &
+                  ptr_col=data2dptr)
+             if(use_soil_matrixcn)then
+             end if
+          endif
 
-       data1dptr => this%decomp_npools_col(:,l)
-       fieldname = trim(decomp_cascade_con%decomp_pool_name_history(l))//'N'
-       longname =  trim(decomp_cascade_con%decomp_pool_name_history(l))//' N'
-       call hist_addfld1d (fname=fieldname, units='gN/m^2', &
-            avgflag='A', long_name=longname, &
-            ptr_col=data1dptr)
-       if(nlevdecomp_full .eq. 1)then
-          if(use_soil_matrixcn)then
-          end if
-       end if
-
-       if ( nlevdecomp_full > 1 ) then
-          data1dptr => this%decomp_npools_1m_col(:,l)
-          fieldname = trim(decomp_cascade_con%decomp_pool_name_history(l))//'N_1m'
-          longname =  trim(decomp_cascade_con%decomp_pool_name_history(l))//' N to 1 meter'
+          data1dptr => this%decomp_npools_col(:,l)
+          fieldname = trim(decomp_cascade_con%decomp_pool_name_history(l))//'N'
+          longname =  trim(decomp_cascade_con%decomp_pool_name_history(l))//' N'
           call hist_addfld1d (fname=fieldname, units='gN/m^2', &
                avgflag='A', long_name=longname, &
-               ptr_col=data1dptr, default = 'inactive')
-       endif
-    end do
+               ptr_col=data1dptr)
+          if(nlevdecomp_full .eq. 1)then
+             if(use_soil_matrixcn)then
+             end if
+          end if
+
+          if ( nlevdecomp_full > 1 ) then
+             data1dptr => this%decomp_npools_1m_col(:,l)
+             fieldname = trim(decomp_cascade_con%decomp_pool_name_history(l))//'N_1m'
+             longname =  trim(decomp_cascade_con%decomp_pool_name_history(l))//' N to 1 meter'
+             call hist_addfld1d (fname=fieldname, units='gN/m^2', &
+                  avgflag='A', long_name=longname, &
+                  ptr_col=data1dptr, default = 'inactive')
+          endif
+       end do
 
 
-    if ( nlevdecomp_full > 1 ) then
-
-       this%sminn_col(begc:endc) = spval
-       call hist_addfld1d (fname='SMINN', units='gN/m^2', &
-            avgflag='A', long_name='soil mineral N', &
-            ptr_col=this%sminn_col)
-
-       this%totlitn_1m_col(begc:endc) = spval
-       call hist_addfld1d (fname='TOTLITN_1m', units='gN/m^2', &
-            avgflag='A', long_name='total litter N to 1 meter', &
-            ptr_col=this%totlitn_1m_col)
-
-       this%totsomn_1m_col(begc:endc) = spval
-       call hist_addfld1d (fname='TOTSOMN_1m', units='gN/m^2', &
-            avgflag='A', long_name='total soil organic matter N to 1 meter', &
-            ptr_col=this%totsomn_1m_col)
-    endif
-
-    this%ntrunc_col(begc:endc) = spval
-    call hist_addfld1d (fname='COL_NTRUNC', units='gN/m^2',  &
-         avgflag='A', long_name='column-level sink for N truncation', &
-         ptr_col=this%ntrunc_col, default='inactive')
-
-    ! add suffix if number of soil decomposition depths is greater than 1
-    if (nlevdecomp > 1) then
-       vr_suffix = "_vr"
-    else 
-       vr_suffix = ""
-    endif
-
-    if (use_nitrif_denitrif) then
        if ( nlevdecomp_full > 1 ) then
-          data2dptr => this%smin_no3_vr_col(begc:endc,1:nlevdecomp_full)
-          call hist_addfld_decomp (fname='SMIN_NO3'//trim(vr_suffix), units='gN/m^3',  type2d='levdcmp', &
-               avgflag='A', long_name='soil mineral NO3 (vert. res.)', &
-               ptr_col=data2dptr)
 
-          data2dptr => this%smin_nh4_vr_col(begc:endc,1:nlevdecomp_full)
-          call hist_addfld_decomp (fname='SMIN_NH4'//trim(vr_suffix), units='gN/m^3',  type2d='levdcmp', &
-               avgflag='A', long_name='soil mineral NH4 (vert. res.)', &
-               ptr_col=data2dptr)
-
-          data2dptr => this%sminn_vr_col(begc:endc,1:nlevdecomp_full)
-          call hist_addfld_decomp (fname='SMINN'//trim(vr_suffix), units='gN/m^3',  type2d='levdcmp', &
+          this%sminn_col(begc:endc) = spval
+          call hist_addfld1d (fname='SMINN', units='gN/m^2', &
                avgflag='A', long_name='soil mineral N', &
-               ptr_col=data2dptr)
+               ptr_col=this%sminn_col)
 
-          this%smin_no3_col(begc:endc) = spval
-          call hist_addfld1d (fname='SMIN_NO3', units='gN/m^2', &
-               avgflag='A', long_name='soil mineral NO3', &
-               ptr_col=this%smin_no3_col)
+          this%totlitn_1m_col(begc:endc) = spval
+          call hist_addfld1d (fname='TOTLITN_1m', units='gN/m^2', &
+               avgflag='A', long_name='total litter N to 1 meter', &
+               ptr_col=this%totlitn_1m_col)
 
-          this%smin_nh4_col(begc:endc) = spval
-          call hist_addfld1d (fname='SMIN_NH4', units='gN/m^2', &
-               avgflag='A', long_name='soil mineral NH4', &
-               ptr_col=this%smin_nh4_col)
+          this%totsomn_1m_col(begc:endc) = spval
+          call hist_addfld1d (fname='TOTSOMN_1m', units='gN/m^2', &
+               avgflag='A', long_name='total soil organic matter N to 1 meter', &
+               ptr_col=this%totsomn_1m_col)
        endif
-    else
-       if ( nlevdecomp_full > 1 ) then
-          data2dptr => this%sminn_vr_col(begc:endc,1:nlevdecomp_full)
-          call hist_addfld_decomp (fname='SMINN'//trim(vr_suffix), units='gN/m^3', type2d='levdcmp', &
-               avgflag='A', long_name='soil mineral N', &
-               ptr_col=data2dptr)
+
+       this%ntrunc_col(begc:endc) = spval
+       call hist_addfld1d (fname='COL_NTRUNC', units='gN/m^2',  &
+            avgflag='A', long_name='column-level sink for N truncation', &
+            ptr_col=this%ntrunc_col, default='inactive')
+
+       ! add suffix if number of soil decomposition depths is greater than 1
+       if (nlevdecomp > 1) then
+          vr_suffix = "_vr"
+       else 
+          vr_suffix = ""
+       endif
+
+       if (use_nitrif_denitrif) then
+          if ( nlevdecomp_full > 1 ) then
+             data2dptr => this%smin_no3_vr_col(begc:endc,1:nlevdecomp_full)
+             call hist_addfld_decomp (fname='SMIN_NO3'//trim(vr_suffix), units='gN/m^3',  type2d='levdcmp', &
+                  avgflag='A', long_name='soil mineral NO3 (vert. res.)', &
+                  ptr_col=data2dptr)
+
+             data2dptr => this%smin_nh4_vr_col(begc:endc,1:nlevdecomp_full)
+             call hist_addfld_decomp (fname='SMIN_NH4'//trim(vr_suffix), units='gN/m^3',  type2d='levdcmp', &
+                  avgflag='A', long_name='soil mineral NH4 (vert. res.)', &
+                  ptr_col=data2dptr)
+
+             data2dptr => this%sminn_vr_col(begc:endc,1:nlevdecomp_full)
+             call hist_addfld_decomp (fname='SMINN'//trim(vr_suffix), units='gN/m^3',  type2d='levdcmp', &
+                  avgflag='A', long_name='soil mineral N', &
+                  ptr_col=data2dptr)
+
+             this%smin_no3_col(begc:endc) = spval
+             call hist_addfld1d (fname='SMIN_NO3', units='gN/m^2', &
+                  avgflag='A', long_name='soil mineral NO3', &
+                  ptr_col=this%smin_no3_col)
+
+             this%smin_nh4_col(begc:endc) = spval
+             call hist_addfld1d (fname='SMIN_NH4', units='gN/m^2', &
+                  avgflag='A', long_name='soil mineral NH4', &
+                  ptr_col=this%smin_nh4_col)
+          endif
+       else
+          if ( nlevdecomp_full > 1 ) then
+             data2dptr => this%sminn_vr_col(begc:endc,1:nlevdecomp_full)
+             call hist_addfld_decomp (fname='SMINN'//trim(vr_suffix), units='gN/m^3', type2d='levdcmp', &
+                  avgflag='A', long_name='soil mineral N', &
+                  ptr_col=data2dptr)
+          end if
+
        end if
 
+       this%totlitn_col(begc:endc) = spval
+       call hist_addfld1d (fname='TOTLITN', units='gN/m^2', &
+            avgflag='A', long_name='total litter N', &
+            ptr_col=this%totlitn_col)
+
+       this%totmicn_col(begc:endc) = spval
+       call hist_addfld1d (fname='TOTMICN', units='gN/m^2', &
+            avgflag='A', long_name='total microbial N', &
+            ptr_col=this%totmicn_col)
+
+       this%totsomn_col(begc:endc) = spval
+       call hist_addfld1d (fname='TOTSOMN', units='gN/m^2', &
+            avgflag='A', long_name='total soil organic matter N', &
+            ptr_col=this%totsomn_col)
+
+       this%dyn_nbal_adjustments_col(begc:endc) = spval
+       call hist_addfld1d (fname='DYN_COL_SOIL_ADJUSTMENTS_N', units='gN/m^2', &
+            avgflag='SUM', &
+            long_name='Adjustments in soil nitrogen due to dynamic column areas; &
+            &only makes sense at the column level: should not be averaged to gridcell', &
+            ptr_col=this%dyn_nbal_adjustments_col, default='inactive')
+
+       if (use_nitrif_denitrif) then
+          call hist_addfld1d (fname='DYN_COL_SOIL_ADJUSTMENTS_NO3', units='gN/m^2', &
+               avgflag='SUM', &
+               long_name='Adjustments in soil NO3 due to dynamic column areas; &
+               &only makes sense at the column level: should not be averaged to gridcell', &
+               ptr_col=this%dyn_no3bal_adjustments_col, default='inactive')
+
+          call hist_addfld1d (fname='DYN_COL_SOIL_ADJUSTMENTS_NH4', units='gN/m^2', &
+               avgflag='SUM', &
+               long_name='Adjustments in soil NH4 due to dynamic column areas; &
+               &only makes sense at the column level: should not be averaged to gridcell', &
+               ptr_col=this%dyn_nh4bal_adjustments_col, default='inactive')
+       end if
     end if
 
-    this%totlitn_col(begc:endc) = spval
-    call hist_addfld1d (fname='TOTLITN', units='gN/m^2', &
-         avgflag='A', long_name='total litter N', &
-         ptr_col=this%totlitn_col)
-
-    this%totmicn_col(begc:endc) = spval
-    call hist_addfld1d (fname='TOTMICN', units='gN/m^2', &
-         avgflag='A', long_name='total microbial N', &
-         ptr_col=this%totmicn_col)
-
-    this%totsomn_col(begc:endc) = spval
-    call hist_addfld1d (fname='TOTSOMN', units='gN/m^2', &
-         avgflag='A', long_name='total soil organic matter N', &
-         ptr_col=this%totsomn_col)
-
-    this%dyn_nbal_adjustments_col(begc:endc) = spval
-    call hist_addfld1d (fname='DYN_COL_SOIL_ADJUSTMENTS_N', units='gN/m^2', &
-         avgflag='SUM', &
-         long_name='Adjustments in soil nitrogen due to dynamic column areas; &
-         &only makes sense at the column level: should not be averaged to gridcell', &
-         ptr_col=this%dyn_nbal_adjustments_col, default='inactive')
-
-    if (use_nitrif_denitrif) then
-       call hist_addfld1d (fname='DYN_COL_SOIL_ADJUSTMENTS_NO3', units='gN/m^2', &
-            avgflag='SUM', &
-            long_name='Adjustments in soil NO3 due to dynamic column areas; &
-            &only makes sense at the column level: should not be averaged to gridcell', &
-            ptr_col=this%dyn_no3bal_adjustments_col, default='inactive')
-
-       call hist_addfld1d (fname='DYN_COL_SOIL_ADJUSTMENTS_NH4', units='gN/m^2', &
-            avgflag='SUM', &
-            long_name='Adjustments in soil NH4 due to dynamic column areas; &
-            &only makes sense at the column level: should not be averaged to gridcell', &
-            ptr_col=this%dyn_nh4bal_adjustments_col, default='inactive')
+    if ( nitrogen_type == 'shadow' ) then
+       this%decomp_npools_vr_col(begc:endc,:,:) = spval
+       do l  = 1, ndecomp_pools
+          if ( nlevdecomp_full > 1 ) then
+             data2dptr => this%decomp_npools_vr_col(:,1:nlevdecomp_full,l)
+             fieldname = 'SHADOW_'//trim(decomp_cascade_con%decomp_pool_name_history(l))//'N_vr'
+             longname =  'Shadow '//trim(decomp_cascade_con%decomp_pool_name_history(l))//' N (vertically resolved)'
+             call hist_addfld2d (fname=fieldname, units='gN/m^3',  type2d='levdcmp', &
+                  avgflag='A', long_name=longname, &
+                  ptr_col=data2dptr)
+          endif
+       end do
     end if
+
   end subroutine InitHistory
 
   !-----------------------------------------------------------------------
@@ -437,7 +459,8 @@ contains
   end subroutine InitCold
 
   !-----------------------------------------------------------------------
-  subroutine Restart ( this,  bounds, ncid, flag, totvegc_col )
+  subroutine Restart ( this,  bounds, ncid, flag, totvegc_col, nitrogen_type, &
+     base_soilbiogeochem_nitrogenstate_inst )
     !
     ! !DESCRIPTION: 
     ! Read/write CN restart data for nitrogen state
@@ -454,6 +477,8 @@ contains
     type(file_desc_t)          , intent(inout) :: ncid   
     character(len=*)           , intent(in)    :: flag   !'read' or 'write' or 'define'
     real(r8)                   , intent(in)    :: totvegc_col(bounds%begc:bounds%endc) ! (gC/m2) total vegetation carbon
+    character(len=*)           , intent(in)    :: nitrogen_type
+    type(soilbiogeochem_nitrogenstate_type) , intent(in), optional :: base_soilbiogeochem_nitrogenstate_inst
 
     !
     ! !LOCAL VARIABLES:
@@ -469,127 +494,161 @@ contains
     character(len=128) :: varname    ! temporary
     integer            :: itemp      ! temporary 
     integer , pointer  :: iptemp(:)  ! pointer to memory to be allocated
-    ! spinup state as read from restart file, for determining whether to enter or exit spinup mode.
-    integer            :: restart_file_spinup_state 
     ! flags for comparing the model and restart decomposition cascades
     integer            :: decomp_cascade_state, restart_file_decomp_cascade_state 
     integer            :: i_decomp,j_decomp,i_lev,j_lev
     !------------------------------------------------------------------------
 
-    ! sminn
-    ptr2d => this%sminn_vr_col
-    call restartvar(ncid=ncid, flag=flag, varname="sminn_vr", xtype=ncd_double,  &
-         dim1name='column', dim2name='levgrnd', switchdim=.true., &
-         long_name='',  units='gN/m3', fill_value=spval, &
-         scale_by_thickness=.false., &
-         interpinic_flag='interp', readvar=readvar, data=ptr2d)
-    if (flag=='read' .and. .not. readvar) then
-       call endrun(msg='ERROR::'//trim(varname)//' is required on an initialization dataset'//&
-            errMsg(sourcefile, __LINE__))
-    end if
-
-    ! decomposing N pools
-    do k = 1, ndecomp_pools
-       varname=trim(decomp_cascade_con%decomp_pool_name_restart(k))//'n'
-       ptr2d => this%decomp_npools_vr_col(:,:,k)
-       call restartvar(ncid=ncid, flag=flag, varname=trim(varname)//"_vr", xtype=ncd_double, &
+    if ( nitrogen_type == 'base' ) then
+       ! sminn
+       ptr2d => this%sminn_vr_col
+       call restartvar(ncid=ncid, flag=flag, varname="sminn_vr", xtype=ncd_double,  &
             dim1name='column', dim2name='levgrnd', switchdim=.true., &
-            long_name='', units='gN/m3', &
-            scale_by_thickness=.false., &
-            interpinic_flag='interp', readvar=readvar, data=ptr2d) 
-       if (flag=='read' .and. .not. readvar) then
-          call endrun(msg='ERROR:: '//trim(varname)//' is required on an initialization dataset'//&
-               errMsg(sourcefile, __LINE__))
-       end if
-    end do
-    if(flag=='write')then
-       if(use_soil_matrixcn)then
-       end if
-    end if
-    if(use_soil_matrixcn)then
-       if(flag=='read')then
-       end if
-    end if
-          
-    ptr2d => this%ntrunc_vr_col
-    call restartvar(ncid=ncid, flag=flag, varname="col_ntrunc_vr", xtype=ncd_double,  &
-         dim1name='column', dim2name='levgrnd', switchdim=.true., &
-         long_name='',  units='gN/m3', fill_value=spval, &
-         scale_by_thickness=.false., &
-         interpinic_flag='interp', readvar=readvar, data=ptr2d)
-
-    if (use_nitrif_denitrif) then
-       ! smin_no3_vr
-       ptr2d => this%smin_no3_vr_col(:,:)
-       call restartvar(ncid=ncid, flag=flag, varname='smin_no3_vr', xtype=ncd_double, &
-            dim1name='column', dim2name='levgrnd', switchdim=.true., &
-            long_name='', units='gN/m3', &
+            long_name='',  units='gN/m3', fill_value=spval, &
             scale_by_thickness=.false., &
             interpinic_flag='interp', readvar=readvar, data=ptr2d)
        if (flag=='read' .and. .not. readvar) then
-          call endrun(msg= 'ERROR:: smin_no3_vr'//' is required on an initialization dataset' )
+          call endrun(msg='ERROR::'//trim(varname)//' is required on an initialization dataset'//&
+               errMsg(sourcefile, __LINE__))
+       end if
+
+       ! decomposing N pools
+       do k = 1, ndecomp_pools
+          varname=trim(decomp_cascade_con%decomp_pool_name_restart(k))//'n'
+          ptr2d => this%decomp_npools_vr_col(:,:,k)
+          call restartvar(ncid=ncid, flag=flag, varname=trim(varname)//"_vr", xtype=ncd_double, &
+               dim1name='column', dim2name='levgrnd', switchdim=.true., &
+               long_name='', units='gN/m3', &
+               scale_by_thickness=.false., &
+               interpinic_flag='interp', readvar=readvar, data=ptr2d) 
+          if (flag=='read' .and. .not. readvar) then
+             call endrun(msg='ERROR:: '//trim(varname)//' is required on an initialization dataset'//&
+                  errMsg(sourcefile, __LINE__))
+          end if
+       end do
+       if(flag=='write')then
+          if(use_soil_matrixcn)then
+          end if
+       end if
+       if(use_soil_matrixcn)then
+          if(flag=='read')then
+          end if
+       end if
+             
+       ptr2d => this%ntrunc_vr_col
+       call restartvar(ncid=ncid, flag=flag, varname="col_ntrunc_vr", xtype=ncd_double,  &
+            dim1name='column', dim2name='levgrnd', switchdim=.true., &
+            long_name='',  units='gN/m3', fill_value=spval, &
+            scale_by_thickness=.false., &
+            interpinic_flag='interp', readvar=readvar, data=ptr2d)
+
+       if (use_nitrif_denitrif) then
+          ! smin_no3_vr
+          ptr2d => this%smin_no3_vr_col(:,:)
+          call restartvar(ncid=ncid, flag=flag, varname='smin_no3_vr', xtype=ncd_double, &
+               dim1name='column', dim2name='levgrnd', switchdim=.true., &
+               long_name='', units='gN/m3', &
+               scale_by_thickness=.false., &
+               interpinic_flag='interp', readvar=readvar, data=ptr2d)
+          if (flag=='read' .and. .not. readvar) then
+             call endrun(msg= 'ERROR:: smin_no3_vr'//' is required on an initialization dataset' )
+          end if
+       end if
+
+       if (use_nitrif_denitrif) then
+          ! smin_nh4
+          ptr2d => this%smin_nh4_vr_col(:,:)
+          call restartvar(ncid=ncid, flag=flag, varname='smin_nh4_vr', xtype=ncd_double, &
+               dim1name='column', dim2name='levgrnd', switchdim=.true., &
+               long_name='', units='gN/m3', &
+               scale_by_thickness=.false., &
+               interpinic_flag='interp', readvar=readvar, data=ptr2d) 
+          if (flag=='read' .and. .not. readvar) then
+             call endrun(msg= 'ERROR:: smin_nh4_vr'//' is required on an initialization dataset' )
+          end if
        end if
     end if
 
-    if (use_nitrif_denitrif) then
-       ! smin_nh4
-       ptr2d => this%smin_nh4_vr_col(:,:)
-       call restartvar(ncid=ncid, flag=flag, varname='smin_nh4_vr', xtype=ncd_double, &
+    if ( nitrogen_type == 'shadow' ) then
+       ! decomposing N pools
+       do k = 1, ndecomp_pools
+          varname='shadow_'//trim(decomp_cascade_con%decomp_pool_name_restart(k))//'n'
+          ptr2d => this%decomp_npools_vr_col(:,:,k)
+          call restartvar(ncid=ncid, flag=flag, varname=trim(varname)//"_vr", xtype=ncd_double, &
+               dim1name='column', dim2name='levgrnd', switchdim=.true., &
+               long_name='', units='gN/m3', &
+               scale_by_thickness=.false., &
+               interpinic_flag='interp', readvar=readvar, data=ptr2d)
+          if (flag=='read' .and. .not. readvar) then
+             write(iulog,*) 'initializing shadow_soilbiogeochem_nitrogenstate_inst%decomp_cpools_vr_col' &
+                  // ' with base value for: '//trim(varname)
+             do i = bounds%begc,bounds%endc
+                do j = 1, nlevdecomp
+                   if (this%decomp_npools_vr_col(i,j,k) /= spval .and. .not. isnan(this%decomp_npools_vr_col(i,j,k)) ) then
+                      this%decomp_npools_vr_col(i,j,k) = base_soilbiogeochem_nitrogenstate_inst%decomp_npools_vr_col(i,j,k)
+                   endif
+                end do
+             end do
+          end if
+       end do
+
+       ptr2d => this%ntrunc_vr_col
+       call restartvar(ncid=ncid, flag=flag, varname="shadow_col_ntrunc_vr", xtype=ncd_double,  &
             dim1name='column', dim2name='levgrnd', switchdim=.true., &
-            long_name='', units='gN/m3', &
+            long_name='',  units='gN/m3', fill_value=spval, &
             scale_by_thickness=.false., &
-            interpinic_flag='interp', readvar=readvar, data=ptr2d) 
-       if (flag=='read' .and. .not. readvar) then
-          call endrun(msg= 'ERROR:: smin_nh4_vr'//' is required on an initialization dataset' )
-       end if
+            interpinic_flag='interp', readvar=readvar, data=ptr2d)
     end if
 
     ! decomp_cascade_state - the purpose of this is to check to make sure the bgc used 
     ! matches what the restart file was generated with.  
     ! add info about the SOM decomposition cascade
+    ! It is only necessary to do this test once, for nitrogen_type == 'base'
 
-    if (decomp_method == century_decomp ) then
-       decomp_cascade_state = 1
-    else if (decomp_method == mimics_decomp ) then
-       decomp_cascade_state = 2
-    else
-       decomp_cascade_state = 0
-    end if
-    ! add info about the nitrification / denitrification state
-    if (use_nitrif_denitrif) then
-       decomp_cascade_state = decomp_cascade_state + 10
-    end if
-    if (flag == 'write') itemp = decomp_cascade_state    
-    call restartvar(ncid=ncid, flag=flag, varname='decomp_cascade_state', xtype=ncd_int,  &
-         long_name='BGC of the model that wrote this restart file:' &
-         // '  1s column: 0 = CLM-CN cascade, 1 = Century cascade;' &
-         // ' 10s column: 0 = CLM-CN denitrification, 10 = Century denitrification', units='', &
-         interpinic_flag='skip', readvar=readvar, data=itemp)
-    if (flag=='read') then
-       if (.not. readvar) then
-          ! assume, for sake of backwards compatibility, that if decomp_cascade_state 
-          ! is not in the restart file, then the current model state is the same as 
-          ! the prior model state
-          restart_file_decomp_cascade_state = decomp_cascade_state
-          if ( masterproc ) write(iulog,*) ' CNRest: WARNING!  Restart file does not ' &
-               // ' contain info on decomp_cascade_state used to generate the restart file.  '
-          if ( masterproc ) write(iulog,*) '   Assuming the same as current setting: ', decomp_cascade_state
+    if ( nitrogen_type == 'base' ) then
+       if (decomp_method == century_decomp ) then
+          decomp_cascade_state = 1
+       else if (decomp_method == mimics_decomp ) then
+          decomp_cascade_state = 2
        else
-          restart_file_decomp_cascade_state = itemp  
-          if (decomp_cascade_state /= restart_file_decomp_cascade_state ) then
-             if ( masterproc ) then
-                write(iulog,*) 'CNRest: ERROR--the decomposition cascade differs between the current ' &
-                     // ' model state and the model that wrote the restart file. '
-                write(iulog,*) 'The model will be horribly out of equilibrium until after a lengthy spinup. '
-                write(iulog,*) 'Stopping here since this is probably an error in configuring the run. '
-                write(iulog,*) 'If you really wish to proceed, then override by setting '
-                write(iulog,*) 'override_bgc_restart_mismatch_dump to .true. in the namelist'
-                if ( .not. override_bgc_restart_mismatch_dump ) then
-                   call endrun(msg= ' CNRest: Stopping. Decomposition cascade mismatch error.'//&
-                        errMsg(sourcefile, __LINE__))
+          decomp_cascade_state = 0
+       end if
+       ! add info about the nitrification / denitrification state
+       if (use_nitrif_denitrif) then
+          decomp_cascade_state = decomp_cascade_state + 10
+       end if
+       if (flag == 'write') itemp = decomp_cascade_state    
+       call restartvar(ncid=ncid, flag=flag, varname='decomp_cascade_state', xtype=ncd_int,  &
+            long_name='BGC of the model that wrote this restart file:' &
+            // '  1s column: 0 = CLM-CN cascade, 1 = Century cascade;' &
+            // ' 10s column: 0 = CLM-CN denitrification, 10 = Century denitrification', units='', &
+            interpinic_flag='skip', readvar=readvar, data=itemp)
+       if (flag=='read') then
+          if (.not. readvar) then
+             ! assume, for sake of backwards compatibility, that if decomp_cascade_state 
+             ! is not in the restart file, then the current model state is the same as 
+             ! the prior model state
+             restart_file_decomp_cascade_state = decomp_cascade_state
+             if ( masterproc ) write(iulog,*) ' CNRest: WARNING!  Restart file does not ' &
+                  // ' contain info on decomp_cascade_state used to generate the restart file.  '
+             if ( masterproc ) write(iulog,*) '   Assuming the same as current setting: ', decomp_cascade_state
+          else
+             restart_file_decomp_cascade_state = itemp  
+             if (decomp_cascade_state /= restart_file_decomp_cascade_state ) then
+                if ( masterproc ) then
+                   write(iulog,*) 'CNRest: ERROR--the decomposition cascade differs between the current ' &
+                        // ' model state and the model that wrote the restart file. '
+                   write(iulog,*) 'The model will be horribly out of equilibrium until after a lengthy spinup. '
+                   write(iulog,*) 'Stopping here since this is probably an error in configuring the run. '
+                   write(iulog,*) 'If you really wish to proceed, then override by setting '
+                   write(iulog,*) 'override_bgc_restart_mismatch_dump to .true. in the namelist'
+                   if ( .not. override_bgc_restart_mismatch_dump ) then
+                      call endrun(msg= ' CNRest: Stopping. Decomposition cascade mismatch error.'//&
+                           errMsg(sourcefile, __LINE__))
+                   endif
                 endif
              endif
-          endif
+          end if
        end if
     end if
 
@@ -602,21 +661,25 @@ contains
     ! cannot be called again because it will try to define the variable twice
     ! when the flag below is set to define
     if (flag == 'read') then
-       call restartvar(ncid=ncid, flag=flag, varname='spinup_state', xtype=ncd_int,  &
-            long_name='Spinup state of the model that wrote this restart file: ' &
-            // ' 0 = normal model mode, 1 = AD spinup', units='', &
-            interpinic_flag='copy', readvar=readvar,  data=idata)
-       if (readvar) then
-          restart_file_spinup_state = idata
-       else
-          ! assume, for sake of backwards compatibility, that if spinup_state is not in 
-          ! the restart file then current model state is the same as prior model state
-          restart_file_spinup_state = spinup_state
-          if ( masterproc ) then
-             write(iulog,*) ' WARNING!  Restart file does not contain info ' &
-                  // ' on spinup state used to generate the restart file. '
-             write(iulog,*) '   Assuming the same as current setting: ', spinup_state
+       if ( nitrogen_type == 'base' ) then
+          call restartvar(ncid=ncid, flag=flag, varname='spinup_state', xtype=ncd_int,  &
+               long_name='Spinup state of the model that wrote this restart file: ' &
+               // ' 0 = normal model mode, 1 = AD spinup', units='', &
+               interpinic_flag='copy', readvar=readvar,  data=idata)
+          if (readvar) then
+             this%restart_file_spinup_state = idata
+          else
+             ! assume, for sake of backwards compatibility, that if spinup_state is not in 
+             ! the restart file then current model state is the same as prior model state
+             this%restart_file_spinup_state = spinup_state
+             if ( masterproc ) then
+                write(iulog,*) ' WARNING!  Restart file does not contain info ' &
+                     // ' on spinup state used to generate the restart file. '
+                write(iulog,*) '   Assuming the same as current setting: ', spinup_state
+             end if
           end if
+       else
+          this%restart_file_spinup_state = base_soilbiogeochem_nitrogenstate_inst%restart_file_spinup_state
        end if
     end if
 
@@ -628,11 +691,11 @@ contains
     ! by the associated AD factor.
     ! only allow this to occur on first timestep of model run.
 
-    if (flag == 'read' .and. spinup_state /= restart_file_spinup_state ) then
-       if (spinup_state == 0 .and. restart_file_spinup_state >= 1 ) then
+    if (flag == 'read' .and. spinup_state /= this%restart_file_spinup_state ) then
+       if (spinup_state == 0 .and. this%restart_file_spinup_state >= 1 ) then
           if ( masterproc ) write(iulog,*) ' NitrogenStateType Restart: taking SOM pools out of AD spinup mode'
           exit_spinup = .true.
-       else if (spinup_state >= 1 .and. restart_file_spinup_state == 0 ) then
+       else if (spinup_state >= 1 .and. this%restart_file_spinup_state == 0 ) then
           if ( masterproc ) write(iulog,*) ' NitrogenStateType Restart: taking SOM pools into AD spinup mode'
           enter_spinup = .true.
        else

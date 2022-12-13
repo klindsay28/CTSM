@@ -1014,6 +1014,7 @@ contains
                c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst, &
                soilbiogeochem_state_inst,                                               &
                soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst,     &
+               shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst, &
                active_layer_inst, clm_fates, &
                atm2lnd_inst, water_inst%waterstatebulk_inst, &
                water_inst%waterdiagnosticbulk_inst, water_inst%waterfluxbulk_inst,      &
@@ -1095,7 +1096,8 @@ contains
                shadow_soilbiogeochem_carbonstate_inst, &
                c13_soilbiogeochem_carbonflux_inst, c13_soilbiogeochem_carbonstate_inst, &
                c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst, &
-               soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst)
+               soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst, &
+               shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst)
           call t_stopf('EcosysDynPostDrainage')
 
        end if
@@ -1120,6 +1122,7 @@ contains
                shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst,      &
                soilbiogeochem_state_inst, clm_fates,                                               &
                soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst,                &
+               shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst,  &
                c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst,            &
                c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst,            &
                active_layer_inst, atm2lnd_inst, water_inst%waterfluxbulk_inst,                     &

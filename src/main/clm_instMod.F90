@@ -149,7 +149,9 @@ module clm_instMod
   type(soilbiogeochem_carbonflux_type)   , public :: c13_soilbiogeochem_carbonflux_inst
   type(soilbiogeochem_carbonflux_type)   , public :: c14_soilbiogeochem_carbonflux_inst
   type(soilbiogeochem_nitrogenstate_type), public :: soilbiogeochem_nitrogenstate_inst
+  type(soilbiogeochem_nitrogenstate_type), public :: shadow_soilbiogeochem_nitrogenstate_inst
   type(soilbiogeochem_nitrogenflux_type) , public :: soilbiogeochem_nitrogenflux_inst
+  type(soilbiogeochem_nitrogenflux_type) , public :: shadow_soilbiogeochem_nitrogenflux_inst
 
   ! General biogeochem types
   type(ch4_type)      , public            :: ch4_inst
@@ -424,14 +426,28 @@ contains
        call soilbiogeochem_nitrogenstate_inst%Init(bounds, &
             soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col(begc:endc,1:nlevdecomp_full,1:ndecomp_pools), &
             soilbiogeochem_carbonstate_inst%decomp_cpools_col(begc:endc,1:ndecomp_pools),  &
-            soilbiogeochem_carbonstate_inst%decomp_cpools_1m_col(begc:endc, 1:ndecomp_pools))
+            soilbiogeochem_carbonstate_inst%decomp_cpools_1m_col(begc:endc, 1:ndecomp_pools), &
+            nitrogen_type='base')
 
-       call soilbiogeochem_nitrogenflux_inst%Init(bounds) 
+       if (use_shadow_soilpools) then
+          call shadow_soilbiogeochem_nitrogenstate_inst%Init(bounds, &
+               soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col(begc:endc,1:nlevdecomp_full,1:ndecomp_pools), &
+               soilbiogeochem_carbonstate_inst%decomp_cpools_col(begc:endc,1:ndecomp_pools),  &
+               soilbiogeochem_carbonstate_inst%decomp_cpools_1m_col(begc:endc, 1:ndecomp_pools), &
+               nitrogen_type='shadow')
+       end if
+
+       call soilbiogeochem_nitrogenflux_inst%Init(bounds, nitrogen_type='base')
+
+       if (use_shadow_soilpools) then
+          call shadow_soilbiogeochem_nitrogenflux_inst%Init(bounds, nitrogen_type='shadow')
+       end if
 
        ! Initialize precision control for soil biogeochemistry
        call SoilBiogeochemPrecisionControlInit( soilbiogeochem_carbonstate_inst, &
             shadow_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonstate_inst, &
-            c14_soilbiogeochem_carbonstate_inst, soilbiogeochem_nitrogenstate_inst)
+            c14_soilbiogeochem_carbonstate_inst, soilbiogeochem_nitrogenstate_inst, &
+            shadow_soilbiogeochem_nitrogenstate_inst)
 
     end if ! end of if use_cn 
 
@@ -566,7 +582,13 @@ contains
        call bgc_vegetation_inst%restart(bounds, ncid, flag=flag)
 
        call soilbiogeochem_nitrogenstate_inst%restart(bounds, ncid, flag=flag, &
-            totvegc_col=bgc_vegetation_inst%get_totvegc_col(bounds))
+            totvegc_col=bgc_vegetation_inst%get_totvegc_col(bounds), nitrogen_type='base')
+
+       if (use_shadow_soilpools) then
+          call shadow_soilbiogeochem_nitrogenstate_inst%restart(bounds, ncid, flag=flag, &
+               totvegc_col=bgc_vegetation_inst%get_totvegc_col(bounds), nitrogen_type='shadow', &
+               base_soilbiogeochem_nitrogenstate_inst=soilbiogeochem_nitrogenstate_inst)
+       end if
 
        call crop_inst%restart(bounds, ncid, flag=flag)
     end if

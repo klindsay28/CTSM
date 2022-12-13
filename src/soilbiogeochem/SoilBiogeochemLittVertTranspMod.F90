@@ -88,7 +88,8 @@ contains
        shadow_soilbiogeochem_carbonstate_inst, shadow_soilbiogeochem_carbonflux_inst, &
        c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst, &
        c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst, &
-       soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)
+       soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst,     &
+       shadow_soilbiogeochem_nitrogenstate_inst, shadow_soilbiogeochem_nitrogenflux_inst)
     !
     ! !DESCRIPTION:
     ! Calculate vertical mixing of soil and litter pools.  Also reconcile sources and sinks of these pools 
@@ -121,6 +122,8 @@ contains
     type(soilbiogeochem_carbonflux_type)    , intent(inout) :: c14_soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: soilbiogeochem_nitrogenstate_inst
     type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: soilbiogeochem_nitrogenflux_inst
+    type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: shadow_soilbiogeochem_nitrogenstate_inst
+    type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: shadow_soilbiogeochem_nitrogenflux_inst
     !
     ! !LOCAL VARIABLES:
     real(r8) :: diffus (bounds%begc:bounds%endc,1:nlevdecomp+1)                    ! diffusivity (m2/s)  (includes spinup correction, if any)
@@ -147,6 +150,7 @@ contains
     integer  :: ntype
     integer  :: i_type,s,fc,c,j,l,i                                                ! indices
     integer  :: i_type_cshadow                                                     ! i_type value for shadow c pools
+    integer  :: i_type_nshadow                                                     ! i_type value for shadow n pools
     integer  :: i_type_c13                                                         ! i_type value for c13 pools
     integer  :: i_type_c14                                                         ! i_type value for c14 pools
     integer  :: jtop(bounds%begc:bounds%endc)                                      ! top level at each column
@@ -186,8 +190,11 @@ contains
       if ( use_shadow_soilpools ) then
          ntype = ntype + 1
          i_type_cshadow = ntype
+         ntype = ntype + 1
+         i_type_nshadow = ntype
       else
          i_type_cshadow = -1
+         i_type_nshadow = -1
       endif
       if ( use_c13 ) then
          ntype = ntype + 1
@@ -276,6 +283,13 @@ contains
             conc_ptr          => shadow_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col
             source            => shadow_soilbiogeochem_carbonflux_inst%decomp_cpools_sourcesink_col
             trcr_tendency_ptr => shadow_soilbiogeochem_carbonflux_inst%decomp_cpools_transport_tendency_col
+         end if
+         if (i_type == i_type_nshadow) then
+            if (use_cn ) then
+               conc_ptr          => shadow_soilbiogeochem_nitrogenstate_inst%decomp_npools_vr_col
+               source            => shadow_soilbiogeochem_nitrogenflux_inst%decomp_npools_sourcesink_col
+               trcr_tendency_ptr => shadow_soilbiogeochem_nitrogenflux_inst%decomp_npools_transport_tendency_col
+            end if
          end if
          if (i_type == i_type_c13) then
             conc_ptr          => c13_soilbiogeochem_carbonstate_inst%decomp_cpools_vr_col

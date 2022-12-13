@@ -49,6 +49,7 @@ contains
        shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst,      &
        soilbiogeochem_state_inst, clm_fates,                                               &
        soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst,                &
+       shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst,  &
        c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst,            &
        c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst,            &
        active_layer_inst, atm2lnd_inst, waterfluxbulk_inst,                                &
@@ -105,6 +106,8 @@ contains
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c14_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: soilbiogeochem_nitrogenflux_inst
     type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: soilbiogeochem_nitrogenstate_inst
+    type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: shadow_soilbiogeochem_nitrogenflux_inst
+    type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: shadow_soilbiogeochem_nitrogenstate_inst
     type(active_layer_type)                 , intent(in)    :: active_layer_inst
     type(atm2lnd_type)                      , intent(in)    :: atm2lnd_inst
     type(waterfluxbulk_type)                    , intent(in)    :: waterfluxbulk_inst
@@ -259,7 +262,8 @@ contains
             shadow_soilbiogeochem_carbonstate_inst, shadow_soilbiogeochem_carbonflux_inst, &
             c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst, &
             c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst, &
-            soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)
+            soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst,     &
+            shadow_soilbiogeochem_nitrogenstate_inst, shadow_soilbiogeochem_nitrogenflux_inst)
 
        call t_stopf('SoilBiogeochemLittVertTransp')
     end if

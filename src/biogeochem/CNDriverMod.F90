@@ -101,6 +101,7 @@ contains
        c14_soilbiogeochem_carbonflux_inst, c14_soilbiogeochem_carbonstate_inst,            &
        soilbiogeochem_state_inst,                                                          &
        soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst,                &
+       shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst,  &
        active_layer_inst, clm_fates,                                                       &
        atm2lnd_inst, waterstatebulk_inst, waterdiagnosticbulk_inst, waterfluxbulk_inst,    &
        wateratm2lndbulk_inst, canopystate_inst, soilstate_inst, temperature_inst,          &
@@ -129,6 +130,7 @@ contains
     use FireMethodType                    , only: fire_method_type
     use CNCIsoFluxMod                     , only: CIsoFlux1, CIsoFlux2, CIsoFlux2h, CIsoFlux3
     use CNCShadowFluxMod                  , only: CShadowFlux1
+    use CNNShadowFluxMod                  , only: NShadowFlux1
     use CNC14DecayMod                     , only: C14Decay
     use CNCStateUpdate1Mod                , only: CStateUpdate1,CStateUpdate0
     use CNCStateUpdate2Mod                , only: CStateUpdate2, CStateUpdate2h
@@ -193,6 +195,8 @@ contains
     type(soilbiogeochem_carbonstate_type)   , intent(inout) :: c14_soilbiogeochem_carbonstate_inst
     type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: soilbiogeochem_nitrogenflux_inst
     type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: soilbiogeochem_nitrogenstate_inst
+    type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: shadow_soilbiogeochem_nitrogenflux_inst
+    type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: shadow_soilbiogeochem_nitrogenstate_inst
     type(active_layer_type)                 , intent(in)    :: active_layer_inst
     type(atm2lnd_type)                      , intent(in)    :: atm2lnd_inst
     type(waterstatebulk_type)                   , intent(in)    :: waterstatebulk_inst
@@ -297,6 +301,10 @@ contains
     call t_startf('CNZero-soilbgc-nflux')
     call soilbiogeochem_nitrogenflux_inst%SetValues( &
          num_soilc, filter_soilc, 0._r8)
+    if ( use_shadow_soilpools ) then
+       call shadow_soilbiogeochem_nitrogenflux_inst%SetValues( &
+            num_soilc, filter_soilc, 0._r8)
+    end if
 
     call t_stopf('CNZero-soilbgc-nflux')
     call t_stopf('CNZero')
@@ -640,6 +648,13 @@ contains
             isotope='c14')
     end if
 
+    ! Set the shadow carbon flux variables (except for gap-phase mortality and fire fluxes)
+    if ( use_shadow_soilpools ) then
+       call NShadowFlux1(num_soilc, filter_soilc, &
+            soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst, &
+            shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst)
+    end if
+
     ! Update all prognostic carbon state variables (except for gap-phase mortality and fire fluxes)
     call CStateUpdate1( num_soilc, filter_soilc, num_soilp, filter_soilp, &
          crop_inst, cnveg_carbonflux_inst, cnveg_carbonstate_inst, &
@@ -664,6 +679,11 @@ contains
     ! Update all prognostic nitrogen state variables (except for gap-phase mortality and fire fluxes)
     call NStateUpdate1(num_soilc, filter_soilc, num_soilp, filter_soilp, &
          cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)
+    if ( use_shadow_soilpools ) then
+       call NStateUpdate1(num_soilc, filter_soilc, num_soilp, filter_soilp, &
+            cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, &
+            shadow_soilbiogeochem_nitrogenflux_inst, update_veg_inst=.false.)
+    end if
 
     call t_stopf('CNUpdate1')
 
@@ -678,6 +698,11 @@ contains
     call t_startf('SoilBiogeochemStateUpdate1')
     call SoilBiogeochemNStateUpdate1(num_soilc, filter_soilc,  &
          soilbiogeochem_state_inst, soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst)
+    if ( use_shadow_soilpools ) then
+       call SoilBiogeochemNStateUpdate1(num_soilc, filter_soilc,  &
+            soilbiogeochem_state_inst, shadow_soilbiogeochem_nitrogenflux_inst, &
+            shadow_soilbiogeochem_nitrogenstate_inst)
+    end if
     call t_stopf('SoilBiogeochemStateUpdate1')
 
 
@@ -693,7 +718,8 @@ contains
          shadow_soilbiogeochem_carbonstate_inst, shadow_soilbiogeochem_carbonflux_inst, &
          c13_soilbiogeochem_carbonstate_inst, c13_soilbiogeochem_carbonflux_inst, &
          c14_soilbiogeochem_carbonstate_inst, c14_soilbiogeochem_carbonflux_inst, &
-         soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst)
+         soilbiogeochem_nitrogenstate_inst, soilbiogeochem_nitrogenflux_inst,     &
+         shadow_soilbiogeochem_nitrogenstate_inst, shadow_soilbiogeochem_nitrogenflux_inst)
 
     call t_stopf('SoilBiogeochemLittVertTransp')
 
@@ -763,6 +789,12 @@ contains
     call NStateUpdate2(num_soilc, filter_soilc, num_soilp, filter_soilp, &
          cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst,soilbiogeochem_nitrogenstate_inst, &
          soilbiogeochem_nitrogenflux_inst)
+    if ( use_shadow_soilpools ) then
+       call NStateUpdate2(num_soilc, filter_soilc, num_soilp, filter_soilp, &
+            cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, &
+            shadow_soilbiogeochem_nitrogenstate_inst, &
+            shadow_soilbiogeochem_nitrogenflux_inst, update_veg_inst=.false.)
+    end if
 
     !--------------------------------------------------------------------------
     ! Update2h (harvest)
@@ -962,6 +994,7 @@ contains
        soilbiogeochem_carbonflux_inst,soilbiogeochem_state_inst, &
        cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, &
        soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst, &
+       shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst, &
        c13_cnveg_carbonstate_inst,c14_cnveg_carbonstate_inst, &
        c13_cnveg_carbonflux_inst,c14_cnveg_carbonflux_inst, &
        c13_soilbiogeochem_carbonstate_inst,c14_soilbiogeochem_carbonstate_inst,&
@@ -1001,6 +1034,8 @@ contains
     type(cnveg_nitrogenstate_type)          , intent(inout) :: cnveg_nitrogenstate_inst
     type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: soilbiogeochem_nitrogenflux_inst
     type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: soilbiogeochem_nitrogenstate_inst
+    type(soilbiogeochem_nitrogenflux_type)  , intent(inout) :: shadow_soilbiogeochem_nitrogenflux_inst
+    type(soilbiogeochem_nitrogenstate_type) , intent(inout) :: shadow_soilbiogeochem_nitrogenstate_inst
     type(cnveg_carbonstate_type)            , intent(inout) :: c13_cnveg_carbonstate_inst
     type(cnveg_carbonstate_type)            , intent(inout) :: c14_cnveg_carbonstate_inst
     type(cnveg_carbonflux_type)             , intent(inout) :: c13_cnveg_carbonflux_inst
@@ -1027,6 +1062,12 @@ contains
     call NStateUpdate3(num_soilc, filter_soilc, num_soilp, filter_soilp, &
          cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, &
          soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst)
+    if ( use_shadow_soilpools ) then
+       call NStateUpdate3(num_soilc, filter_soilc, num_soilp, filter_soilp, &
+            cnveg_nitrogenflux_inst, cnveg_nitrogenstate_inst, &
+            shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst, &
+            update_veg_inst=.false.)
+    end if
 
     call t_stopf('NUpdate3')
 
