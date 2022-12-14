@@ -129,8 +129,8 @@ contains
     use CNGRespMod                        , only: CNGResp
     use FireMethodType                    , only: fire_method_type
     use CNCIsoFluxMod                     , only: CIsoFlux1, CIsoFlux2, CIsoFlux2h, CIsoFlux3
-    use CNCShadowFluxMod                  , only: CShadowFlux1
-    use CNNShadowFluxMod                  , only: NShadowFlux1
+    use CNCShadowFluxMod                  , only: CShadowFlux1, CShadowFlux3
+    use CNNShadowFluxMod                  , only: NShadowFlux1, NShadowFlux3
     use CNC14DecayMod                     , only: C14Decay
     use CNCStateUpdate1Mod                , only: CStateUpdate1,CStateUpdate0
     use CNCStateUpdate2Mod                , only: CStateUpdate2, CStateUpdate2h
@@ -928,6 +928,12 @@ contains
     !--------------------------------------------------------------------------
 
     call t_startf('CNUpdate3')
+    if ( use_shadow_soilpools ) then
+       call CShadowFlux3(num_soilc, filter_soilc, &
+            soilbiogeochem_carbonflux_inst, soilbiogeochem_carbonstate_inst, &
+            shadow_soilbiogeochem_carbonflux_inst, shadow_soilbiogeochem_carbonstate_inst)
+    end if
+
     if ( use_c13 ) then
        call CIsoFlux3(num_soilc, filter_soilc, num_soilp, filter_soilp,     &
             soilbiogeochem_state_inst, soilbiogeochem_carbonflux_inst,      &
@@ -946,6 +952,13 @@ contains
             c14_soilbiogeochem_carbonstate_inst, &
             isotope='c14')
     end if
+
+    if ( use_shadow_soilpools ) then
+       call NShadowFlux3(num_soilc, filter_soilc, &
+            soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst, &
+            shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst)
+    end if
+
 
     call CStateUpdate3( num_soilc, filter_soilc, num_soilp, filter_soilp, &
          cnveg_carbonflux_inst, cnveg_carbonstate_inst, soilbiogeochem_carbonstate_inst, &

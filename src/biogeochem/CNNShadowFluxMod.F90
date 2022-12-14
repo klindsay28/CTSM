@@ -4,9 +4,8 @@ module CNNShadowFluxMod
   ! Module for shadow nitrogen flux variable update, non-mortality fluxes.
   !
   ! !USES:
-#include "shr_assert.h"
   use shr_kind_mod                         , only : r8 => shr_kind_r8
-  use clm_varpar                           , only : ndecomp_cascade_transitions, nlevdecomp
+  use clm_varpar                           , only : ndecomp_cascade_transitions, nlevdecomp, ndecomp_pools
   use SoilBiogeochemCarbonFluxType         , only : soilbiogeochem_carbonflux_type
   use SoilBiogeochemNitrogenStateType      , only : soilbiogeochem_nitrogenstate_type
   use SoilBiogeochemNitrogenFluxType       , only : soilbiogeochem_nitrogenflux_type
@@ -17,6 +16,7 @@ module CNNShadowFluxMod
   !
   ! !PUBLIC MEMBER FUNCTIONS:
   public  :: NShadowFlux1
+  public  :: NShadowFlux3
 
   character(len=*), parameter, private :: sourcefile = &
        __FILE__
@@ -43,9 +43,9 @@ contains
     type(soilbiogeochem_nitrogenstate_type), intent(in)    :: shadow_soilbiogeochem_nitrogenstate_inst
     !
     ! !LOCAL VARIABLES:
-    integer :: l,fc,cc,j
-    integer :: cdp, crp
-    real(r8):: shadow_base_ratio
+    integer  :: l,fc,cc,j
+    integer  :: cdp, crp
+    real(r8) :: shadow_base_ratio
     !-----------------------------------------------------------------------
 
     associate(                                                                                &
@@ -94,5 +94,54 @@ contains
     end associate
 
   end subroutine NShadowFlux1
+
+  !-----------------------------------------------------------------------
+  subroutine NShadowFlux3(num_soilc, filter_soilc, &
+       soilbiogeochem_nitrogenflux_inst, soilbiogeochem_nitrogenstate_inst, &
+       shadow_soilbiogeochem_nitrogenflux_inst, shadow_soilbiogeochem_nitrogenstate_inst)
+    !
+    ! !DESCRIPTION:
+    ! On the radiation time step, set the carbon shadow fluxes for fire mortality
+    !
+    ! !ARGUMENTS:
+    integer                                , intent(in)    :: num_soilc       ! number of soil columns filter
+    integer                                , intent(in)    :: filter_soilc(:) ! filter for soil columns
+    type(soilbiogeochem_nitrogenflux_type) , intent(in)    :: soilbiogeochem_nitrogenflux_inst
+    type(soilbiogeochem_nitrogenstate_type), intent(in)    :: soilbiogeochem_nitrogenstate_inst
+    type(soilbiogeochem_nitrogenflux_type) , intent(inout) :: shadow_soilbiogeochem_nitrogenflux_inst
+    type(soilbiogeochem_nitrogenstate_type), intent(in)    :: shadow_soilbiogeochem_nitrogenstate_inst
+    !
+    ! !LOCAL VARIABLES:
+    integer  :: l,fc,cc,j
+    integer  :: cdp, crp
+    real(r8) :: shadow_base_ratio
+    !-----------------------------------------------------------------------
+
+    associate(                                                                                &
+         soilbiogeochem_ns              => soilbiogeochem_nitrogenstate_inst                , &
+         soilbiogeochem_nf              => soilbiogeochem_nitrogenflux_inst                 , &
+         shadow_soilbiogeochem_ns       => shadow_soilbiogeochem_nitrogenstate_inst         , &
+         shadow_soilbiogeochem_nf       => shadow_soilbiogeochem_nitrogenflux_inst            &
+         )
+
+      do fc = 1, num_soilc
+         cc = filter_soilc(fc)
+         do j = 1, nlevdecomp
+            do l = 1, ndecomp_pools
+               if ( soilbiogeochem_ns%decomp_npools_vr_col(cc,j,l) /= 0._r8) then
+                  shadow_base_ratio = shadow_soilbiogeochem_ns%decomp_npools_vr_col(cc,j,l) &
+                     / soilbiogeochem_ns%decomp_npools_vr_col(cc,j,l)
+                  shadow_soilbiogeochem_nf%m_decomp_npools_to_fire_vr_col(cc,j,l)  =  &
+                     soilbiogeochem_nf%m_decomp_npools_to_fire_vr_col(cc,j,l) * shadow_base_ratio
+               else
+                  shadow_soilbiogeochem_nf%m_decomp_npools_to_fire_vr_col(cc,j,l) = 0._r8
+               end if
+            end do
+         end do
+      end do
+
+    end associate
+
+  end subroutine NShadowFlux3
 
 end module CNNShadowFluxMod
