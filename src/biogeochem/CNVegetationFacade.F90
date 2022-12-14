@@ -999,7 +999,8 @@ contains
 
     ! fire carbon emissions 
     call CNFireEmisUpdate(bounds, num_soilp, filter_soilp, &
-         this%cnveg_carbonflux_inst, this%cnveg_carbonstate_inst, fireemis_inst )
+         this%cnveg_carbonflux_inst, this%cnveg_carbonstate_inst, &
+         soilbiogeochem_carbonflux_inst, fireemis_inst )
 
     call CNAnnualUpdate(bounds,            &
          num_soilc, filter_soilc, &

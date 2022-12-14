@@ -72,8 +72,6 @@ module CNVegNitrogenFluxType
      real(r8), pointer :: harvest_n_to_cwdn_col                     (:,:)   ! col N fluxes associated with harvest to CWD pool (gN/m3/s)
 
      ! fire N fluxes 
-     real(r8), pointer :: m_decomp_npools_to_fire_vr_col            (:,:,:) ! col vertically-resolved decomposing N fire loss (gN/m3/s)
-     real(r8), pointer :: m_decomp_npools_to_fire_col               (:,:)   ! col vertically-integrated (diagnostic) decomposing N fire loss (gN/m2/s)
      real(r8), pointer :: m_leafn_to_fire_patch                     (:)     ! patch (gN/m2/s) fire N emissions from leafn 
      real(r8), pointer :: m_leafn_storage_to_fire_patch             (:)     ! patch (gN/m2/s) fire N emissions from leafn_storage            
      real(r8), pointer :: m_leafn_xfer_to_fire_patch                (:)     ! patch (gN/m2/s) fire N emissions from leafn_xfer     
@@ -470,12 +468,6 @@ contains
     allocate(this%dwt_deadcrootn_to_cwdn_col   (begc:endc,1:nlevdecomp_full)) ; this%dwt_deadcrootn_to_cwdn_col   (:,:) = nan
 
     allocate(this%crop_seedn_to_leaf_patch     (begp:endp))                   ; this%crop_seedn_to_leaf_patch     (:)   = nan
-
-    allocate(this%m_decomp_npools_to_fire_vr_col    (begc:endc,1:nlevdecomp_full,1:ndecomp_pools))
-    allocate(this%m_decomp_npools_to_fire_col       (begc:endc,1:ndecomp_pools                  ))
-
-    this%m_decomp_npools_to_fire_vr_col   (:,:,:) = nan
-    this%m_decomp_npools_to_fire_col      (:,:)   = nan
 
     allocate(this%phenology_n_to_litr_n_col         (begc:endc, 1:nlevdecomp_full, 1:ndecomp_pools))
     allocate(this%gap_mortality_n_to_litr_n_col     (begc:endc, 1:nlevdecomp_full, 1:ndecomp_pools))
@@ -982,28 +974,6 @@ contains
     !-------------------------------
     ! N flux variables - native to column
     !-------------------------------
-
-    do k = 1, ndecomp_pools
-       if ( decomp_cascade_con%is_litter(k) .or. decomp_cascade_con%is_cwd(k) ) then
-          this%m_decomp_npools_to_fire_col(begc:endc,k) = spval
-          data1dptr => this%m_decomp_npools_to_fire_col(:,k)
-          fieldname = 'M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'N_TO_FIRE'
-          longname =  trim(decomp_cascade_con%decomp_pool_name_long(k))//' N fire loss'
-          call hist_addfld1d (fname=fieldname, units='gN/m^2',  &
-               avgflag='A', long_name=longname, &
-               ptr_col=data1dptr, default='inactive')
-
-          if ( nlevdecomp_full > 1 ) then
-             this%m_decomp_npools_to_fire_vr_col(begc:endc,:,k) = spval
-             data2dptr => this%m_decomp_npools_to_fire_vr_col(:,:,k)
-             fieldname = 'M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'N_TO_FIRE'//trim(vr_suffix)
-             longname =  trim(decomp_cascade_con%decomp_pool_name_long(k))//' N fire loss'
-             call hist_addfld_decomp (fname=fieldname, units='gN/m^3',  type2d='levdcmp', &
-                  avgflag='A', long_name=longname, &
-                  ptr_col=data2dptr, default='inactive')
-          endif
-       endif
-    end do
 
     this%fire_nloss_col(begc:endc) = spval
     call hist_addfld1d (fname='COL_FIRE_NLOSS', units='gN/m^2/s', &
@@ -1789,27 +1759,6 @@ contains
        this%wood_harvestn_col(i) = value_column
     end do
 
-    do k = 1, ndecomp_pools
-       do fi = 1,num_column
-          i = filter_column(fi)
-          this%m_decomp_npools_to_fire_col(i,k) = value_column
-       end do
-    end do
-
-    ! Matrix solution
-    if ( use_matrixcn )then
-    end if
-
-
-    do k = 1, ndecomp_pools
-       do j = 1, nlevdecomp_full
-          do fi = 1,num_column
-             i = filter_column(fi)
-             this%m_decomp_npools_to_fire_vr_col(i,j,k) = value_column
-          end do
-       end do
-    end do
-
   end subroutine SetValues
 
   !-----------------------------------------------------------------------
@@ -1845,7 +1794,8 @@ contains
   end subroutine ZeroDwt
 
  !-----------------------------------------------------------------------
-  subroutine Summary_nitrogenflux(this, bounds, num_soilc, filter_soilc, num_soilp, filter_soilp)
+  subroutine Summary_nitrogenflux(this, bounds, num_soilc, filter_soilc, num_soilp, filter_soilp, &
+       m_decomp_npools_to_fire_col)
     !
     ! !USES:
     use clm_varpar    , only: nlevdecomp,ndecomp_cascade_transitions,ndecomp_pools
@@ -1859,6 +1809,7 @@ contains
     integer           , intent(in) :: filter_soilc(:) ! filter for soil columns
     integer           , intent(in) :: num_soilp       ! number of soil patches in filter
     integer           , intent(in) :: filter_soilp(:) ! filter for soil patches
+    real(r8)          , intent(in) :: m_decomp_npools_to_fire_col(bounds%begc:,1:)
     !
     ! !LOCAL VARIABLES:
     integer  :: c,p,j,k,l   ! indices
@@ -1903,18 +1854,6 @@ contains
          this%fire_nloss_patch(bounds%begp:bounds%endp), &
          this%fire_nloss_p2c_col(bounds%begc:bounds%endc))
 
-    ! vertically integrate column-level fire N losses
-    do k = 1, ndecomp_pools
-       do j = 1, nlevdecomp
-          do fc = 1,num_soilc
-             c = filter_soilc(fc)
-             this%m_decomp_npools_to_fire_col(c,k) = &
-                  this%m_decomp_npools_to_fire_col(c,k) + &
-                  this%m_decomp_npools_to_fire_vr_col(c,j,k) * dzsoi_decomp(j)
-          end do
-       end do
-    end do
-
     ! total column-level fire N losses
     do fc = 1,num_soilc
        c = filter_soilc(fc)
@@ -1925,7 +1864,7 @@ contains
           c = filter_soilc(fc)
           this%fire_nloss_col(c) = &
                this%fire_nloss_col(c) + &
-               this%m_decomp_npools_to_fire_col(c,k)
+               m_decomp_npools_to_fire_col(c,k)
        end do
     end do
 

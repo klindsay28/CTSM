@@ -34,6 +34,10 @@ module SoilBiogeochemNitrogenFluxType
      real(r8), pointer :: decomp_cascade_sminn_flux_vr_col          (:,:,:) ! col vert-res mineral N flux for transition along decomposition cascade (gN/m3/s)
      real(r8), pointer :: decomp_cascade_sminn_flux_col             (:,:)   ! col vert-int (diagnostic) mineral N flux for transition along decomposition cascade (gN/m2/s)
 
+     ! fire N fluxes 
+     real(r8), pointer :: m_decomp_npools_to_fire_vr_col            (:,:,:) ! col vertically-resolved decomposing N fire loss (gN/m3/s)
+     real(r8), pointer :: m_decomp_npools_to_fire_col               (:,:)   ! col vertically-integrated (diagnostic) decomposing N fire loss (gN/m2/s)
+
      ! Used to update concentrations concurrently with vertical transport
      ! vertically-resolved immobilization fluxes
      real(r8), pointer :: potential_immob_vr_col                    (:,:)   ! col vertically-resolved potential N immobilization (gN/m3/s) at each level
@@ -255,6 +259,12 @@ contains
     this%decomp_cascade_ntransfer_col     (:,:)   = nan
     this%decomp_cascade_sminn_flux_col    (:,:)   = nan
 
+    allocate(this%m_decomp_npools_to_fire_vr_col    (begc:endc,1:nlevdecomp_full,1:ndecomp_pools))
+    allocate(this%m_decomp_npools_to_fire_col       (begc:endc,1:ndecomp_pools                  ))
+
+    this%m_decomp_npools_to_fire_vr_col   (:,:,:) = nan
+    this%m_decomp_npools_to_fire_col      (:,:)   = nan
+
     allocate(this%sminn_to_denit_decomp_cascade_vr_col (begc:endc,1:nlevdecomp_full,1:ndecomp_cascade_transitions ))
     allocate(this%sminn_to_denit_decomp_cascade_col    (begc:endc,1:ndecomp_cascade_transitions                   ))
     allocate(this%sminn_to_denit_excess_vr_col         (begc:endc,1:nlevdecomp_full                               ))
@@ -415,6 +425,28 @@ contains
                      ptr_col=data2dptr, default='inactive')
              endif
 
+          endif
+       end do
+
+       do k = 1, ndecomp_pools
+          if ( decomp_cascade_con%is_litter(k) .or. decomp_cascade_con%is_cwd(k) ) then
+             this%m_decomp_npools_to_fire_col(begc:endc,k) = spval
+             data1dptr => this%m_decomp_npools_to_fire_col(:,k)
+             fieldname = 'M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'N_TO_FIRE'
+             longname =  trim(decomp_cascade_con%decomp_pool_name_long(k))//' N fire loss'
+             call hist_addfld1d (fname=fieldname, units='gN/m^2',  &
+                  avgflag='A', long_name=longname, &
+                  ptr_col=data1dptr, default='inactive')
+
+             if ( nlevdecomp_full > 1 ) then
+                this%m_decomp_npools_to_fire_vr_col(begc:endc,:,k) = spval
+                data2dptr => this%m_decomp_npools_to_fire_vr_col(:,:,k)
+                fieldname = 'M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'N_TO_FIRE'//trim(vr_suffix)
+                longname =  trim(decomp_cascade_con%decomp_pool_name_long(k))//' N fire loss'
+                call hist_addfld_decomp (fname=fieldname, units='gN/m^3',  type2d='levdcmp', &
+                     avgflag='A', long_name=longname, &
+                     ptr_col=data2dptr, default='inactive')
+             endif
           endif
        end do
 
@@ -1045,6 +1077,27 @@ contains
        end do
     end do
 
+    do k = 1, ndecomp_pools
+       do fi = 1,num_column
+          i = filter_column(fi)
+          this%m_decomp_npools_to_fire_col(i,k) = value_column
+       end do
+    end do
+
+    ! Matrix solution
+    if ( use_soil_matrixcn )then
+    end if
+
+
+    do k = 1, ndecomp_pools
+       do j = 1, nlevdecomp_full
+          do fi = 1,num_column
+             i = filter_column(fi)
+             this%m_decomp_npools_to_fire_vr_col(i,j,k) = value_column
+          end do
+       end do
+    end do
+
   end subroutine SetValues
 
   !-----------------------------------------------------------------------
@@ -1085,6 +1138,18 @@ contains
              this%decomp_cascade_sminn_flux_col(c,k) = &
                   this%decomp_cascade_sminn_flux_col(c,k) + &
                   this%decomp_cascade_sminn_flux_vr_col(c,j,k) * dzsoi_decomp(j) 
+          end do
+       end do
+    end do
+
+    ! vertically integrate column-level fire N losses
+    do k = 1, ndecomp_pools
+       do j = 1, nlevdecomp
+          do fc = 1,num_soilc
+             c = filter_soilc(fc)
+             this%m_decomp_npools_to_fire_col(c,k) = &
+                  this%m_decomp_npools_to_fire_col(c,k) + &
+                  this%m_decomp_npools_to_fire_vr_col(c,j,k) * dzsoi_decomp(j)
           end do
        end do
     end do

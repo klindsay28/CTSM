@@ -865,9 +865,10 @@ contains
 
   !-----------------------------------------------------------------------
   subroutine CIsoFlux3(num_soilc , filter_soilc, num_soilp  , filter_soilp, &
-       soilbiogeochem_state_inst , soilbiogeochem_carbonstate_inst,         &
-       cnveg_carbonflux_inst, cnveg_carbonstate_inst,                       &
-       iso_cnveg_carbonflux_inst, iso_cnveg_carbonstate_inst,               &
+       soilbiogeochem_state_inst, soilbiogeochem_carbonflux_inst,           &
+       soilbiogeochem_carbonstate_inst, cnveg_carbonflux_inst,              &
+       cnveg_carbonstate_inst, iso_cnveg_carbonflux_inst,                   &
+       iso_soilbiogeochem_carbonflux_inst, iso_cnveg_carbonstate_inst,      &
        iso_soilbiogeochem_carbonstate_inst, isotope)
     !
     ! !DESCRIPTION:
@@ -879,10 +880,12 @@ contains
     integer                               , intent(in)    :: num_soilp       ! number of soil patches in filter
     integer                               , intent(in)    :: filter_soilp(:) ! filter for soil patches
     type(soilbiogeochem_state_type)       , intent(in)    :: soilbiogeochem_state_inst
+    type(soilbiogeochem_carbonflux_type)  , intent(in)    :: soilbiogeochem_carbonflux_inst
     type(soilbiogeochem_carbonstate_type) , intent(in)    :: soilbiogeochem_carbonstate_inst
     type(cnveg_carbonflux_type)           , intent(in)    :: cnveg_carbonflux_inst
     type(cnveg_carbonstate_type)          , intent(in)    :: cnveg_carbonstate_inst
     type(cnveg_carbonflux_type)           , intent(inout) :: iso_cnveg_carbonflux_inst
+    type(soilbiogeochem_carbonflux_type)  , intent(inout) :: iso_soilbiogeochem_carbonflux_inst
     type(cnveg_carbonstate_type)          , intent(in)    :: iso_cnveg_carbonstate_inst
     type(soilbiogeochem_carbonstate_type) , intent(in)    :: iso_soilbiogeochem_carbonstate_inst
     character(len=*)                      , intent(in)    :: isotope         ! 'c13' or 'c14'
@@ -898,10 +901,12 @@ contains
          stem_prof                           => soilbiogeochem_state_inst%stem_prof_patch                    , & ! Input:  [real(r8) (:,:) ]  (1/m) profile of stems                                 
          leaf_prof                           => soilbiogeochem_state_inst%leaf_prof_patch                    , & ! Input: [real(r8) (:,:) ]  (1/m) profile of leaves                          
          froot_prof                          => soilbiogeochem_state_inst%froot_prof_patch                   , & ! Input:  [real(r8) (:,:) ]  (1/m) profile of fine roots                                 
+         soilbiogeochem_cf                   => soilbiogeochem_carbonflux_inst                               , &
          soilbiogeochem_cs                   => soilbiogeochem_carbonstate_inst                              , &
          cnveg_cf                            => cnveg_carbonflux_inst                                        , &
          cnveg_cs                            => cnveg_carbonstate_inst                                       , &
          iso_cnveg_cf                        => iso_cnveg_carbonflux_inst                                    , &
+         iso_soilbiogeochem_cf               => iso_soilbiogeochem_carbonflux_inst                           , &
          iso_cnveg_cs                        => iso_cnveg_carbonstate_inst                                   , &
          iso_soilbiogeochem_cs               => iso_soilbiogeochem_carbonstate_inst                          , &
          lf_f                                => pftcon%lf_f                                                  , & ! Input: [real(r8) (:,:)] leaf litter fractions
@@ -1152,12 +1157,12 @@ contains
          do j = 1, nlevdecomp
             do l = 1, ndecomp_pools
                if ( soilbiogeochem_cs%decomp_cpools_vr_col(cc,j,l) /= 0._r8) then
-                  iso_cnveg_cf%m_decomp_cpools_to_fire_vr_col(cc,j,l)  =  &
-                      cnveg_cf%m_decomp_cpools_to_fire_vr_col(cc,j,l) * &
+                  iso_soilbiogeochem_cf%m_decomp_cpools_to_fire_vr_col(cc,j,l)  =  &
+                      soilbiogeochem_cf%m_decomp_cpools_to_fire_vr_col(cc,j,l) * &
                       (iso_soilbiogeochem_cs%decomp_cpools_vr_col(cc,j,l) / &
                            soilbiogeochem_cs%decomp_cpools_vr_col(cc,j,l)) * 1._r8
                else
-                  iso_cnveg_cf%m_decomp_cpools_to_fire_vr_col(cc,j,l) = 0._r8
+                  iso_soilbiogeochem_cf%m_decomp_cpools_to_fire_vr_col(cc,j,l) = 0._r8
                end if
             end do
          end do

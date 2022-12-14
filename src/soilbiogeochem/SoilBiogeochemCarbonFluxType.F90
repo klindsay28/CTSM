@@ -26,6 +26,8 @@ module SoilBiogeochemCarbonFluxType
   type, public :: soilbiogeochem_carbonflux_type
 
      ! fire fluxes
+     real(r8), pointer :: m_decomp_cpools_to_fire_vr_col            (:,:,:) ! vertically-resolved decomposing C fire loss (gC/m3/s)
+     real(r8), pointer :: m_decomp_cpools_to_fire_col               (:,:)   ! vertically-integrated (diagnostic) decomposing C fire loss (gC/m2/s)
      real(r8), pointer :: somc_fire_col                             (:)     ! (gC/m2/s) carbon emissions due to peat burning
 
      ! decomposition fluxes
@@ -110,6 +112,12 @@ contains
 
      begp = bounds%begp; endp = bounds%endp
      begc = bounds%begc; endc = bounds%endc
+
+     allocate(this%m_decomp_cpools_to_fire_vr_col(begc:endc,1:nlevdecomp_full,1:ndecomp_pools))
+     this%m_decomp_cpools_to_fire_vr_col(:,:,:)= nan
+
+     allocate(this%m_decomp_cpools_to_fire_col(begc:endc,1:ndecomp_pools))
+     this%m_decomp_cpools_to_fire_col(:,:)= nan
 
      allocate(this%t_scalar_col      (begc:endc,1:nlevdecomp_full)); this%t_scalar_col      (:,:) =spval
      allocate(this%w_scalar_col      (begc:endc,1:nlevdecomp_full)); this%w_scalar_col      (:,:) =spval
@@ -263,6 +271,28 @@ contains
                 avgflag='A', long_name='fraction of potential HR due to N limitation', &
                 ptr_col=this%fphr_col)
         end if
+
+        this%m_decomp_cpools_to_fire_col(begc:endc,:)      = spval
+        this%m_decomp_cpools_to_fire_vr_col(begc:endc,:,:) = spval
+        do k = 1, ndecomp_pools
+           if ( decomp_cascade_con%is_litter(k) .or. decomp_cascade_con%is_cwd(k) ) then
+              data1dptr => this%m_decomp_cpools_to_fire_col(:,k)
+              fieldname = 'M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'C_TO_FIRE'
+              longname =  trim(decomp_cascade_con%decomp_pool_name_long(k))//' C fire loss'
+              call hist_addfld1d (fname=fieldname, units='gC/m^2/s',  &
+                   avgflag='A', long_name=longname, &
+                   ptr_col=data1dptr, default='inactive')
+
+              if ( nlevdecomp_full > 1 ) then
+                 data2dptr => this%m_decomp_cpools_to_fire_vr_col(:,:,k)
+                 fieldname = 'M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'C_TO_FIRE'//trim(vr_suffix)
+                 longname =  trim(decomp_cascade_con%decomp_pool_name_long(k))//' C fire loss'
+                 call hist_addfld_decomp (fname=fieldname, units='gC/m^3/s', type2d='levdcmp', &
+                      avgflag='A', long_name=longname, &
+                      ptr_col=data2dptr, default='inactive')
+              endif
+           endif
+        end do
 
         this%somc_fire_col(begc:endc) = spval
         call hist_addfld1d (fname='SOMC_FIRE', units='gC/m^2/s', &
@@ -474,6 +504,27 @@ contains
              avgflag='A', long_name='C13 soil organic matter heterotrophic respiration', &
              ptr_col=this%somhr_col, default='inactive')
 
+        this%m_decomp_cpools_to_fire_col(begc:endc,:) = spval
+        this%m_decomp_cpools_to_fire_vr_col(begc:endc,:,:) = spval
+        do k = 1, ndecomp_pools
+           if ( decomp_cascade_con%is_litter(k) .or. decomp_cascade_con%is_cwd(k) ) then
+              data1dptr => this%m_decomp_cpools_to_fire_col(:,k)
+              fieldname = 'C13_M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'C_TO_FIRE'
+              longname =  'C13 '//trim(decomp_cascade_con%decomp_pool_name_long(k))//' C fire loss'
+              call hist_addfld1d (fname=fieldname, units='gC13/m^2',  &
+                   avgflag='A', long_name=longname, &
+                   ptr_col=data1dptr, default='inactive')
+
+              if ( nlevdecomp_full > 1 ) then
+                 data2dptr => this%m_decomp_cpools_to_fire_vr_col(:,:,k)
+                 fieldname = 'C13_M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'C_TO_FIRE'//trim(vr_suffix)
+                 longname =  'C13 '//trim(decomp_cascade_con%decomp_pool_name_long(k))//' C fire loss'
+                 call hist_addfld_decomp (fname=fieldname, units='gC13/m^3',  type2d='levdcmp', &
+                      avgflag='A', long_name=longname, &
+                      ptr_col=data2dptr, default='inactive')
+              end if
+           endif
+        end do
 
         this%decomp_cascade_hr_col(begc:endc,:)             = spval
         this%decomp_cascade_hr_vr_col(begc:endc,:,:)        = spval
@@ -552,6 +603,28 @@ contains
         call hist_addfld1d (fname='C14_SOILC_HR', units='gC14/m^2/s', &
              avgflag='A', long_name='C14 soil organic matter heterotrophic respiration', &
              ptr_col=this%somhr_col, default='inactive')
+
+        this%m_decomp_cpools_to_fire_col(begc:endc,:)      = spval
+        this%m_decomp_cpools_to_fire_vr_col(begc:endc,:,:) = spval
+        do k = 1, ndecomp_pools
+           if ( decomp_cascade_con%is_litter(k) .or. decomp_cascade_con%is_cwd(k) ) then
+              data1dptr => this%m_decomp_cpools_to_fire_col(:,k)
+              fieldname = 'C14_M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'C_TO_FIRE'
+              longname =  'C14 '//trim(decomp_cascade_con%decomp_pool_name_long(k))//' C fire loss'
+              call hist_addfld1d (fname=fieldname, units='gC14/m^2',  &
+                   avgflag='A', long_name=longname, &
+                   ptr_col=data1dptr, default='inactive')
+
+              if ( nlevdecomp_full > 1 ) then
+                 data2dptr => this%m_decomp_cpools_to_fire_vr_col(:,:,k)
+                 fieldname = 'C14_M_'//trim(decomp_cascade_con%decomp_pool_name_history(k))//'C_TO_FIRE'//trim(vr_suffix)
+                 longname =  'C14 '//trim(decomp_cascade_con%decomp_pool_name_long(k))//' C fire loss'
+                 call hist_addfld_decomp (fname=fieldname, units='gC14/m^3',  type2d='levdcmp', &
+                      avgflag='A', long_name=longname, &
+                      ptr_col=data2dptr, default='inactive')
+              end if
+           endif
+        end do
 
         this%decomp_cascade_hr_col(begc:endc,:)             = spval
         this%decomp_cascade_hr_vr_col(begc:endc,:,:)        = spval
@@ -759,6 +832,21 @@ contains
        end do
     end do
 
+    do k = 1, ndecomp_pools
+       do j = 1, nlevdecomp_full
+          do fi = 1,num_column
+             i = filter_column(fi)
+             this%m_decomp_cpools_to_fire_vr_col(i,j,k) = value_column
+          end do
+       end do
+    end do
+
+    do k = 1, ndecomp_pools
+       do fi = 1,num_column
+          i = filter_column(fi)
+          this%m_decomp_cpools_to_fire_col(i,k) = value_column
+       end do
+    end do
 
     do k = 1, ndecomp_pools
        do fi = 1,num_column
@@ -877,6 +965,18 @@ contains
              this%hr_vr_col(c,j) = &
                   this%hr_vr_col(c,j) + &
                   this%decomp_cascade_hr_vr_col(c,j,k)
+          end do
+       end do
+    end do
+
+    ! vertically integrate column-level carbon fire losses
+    do l = 1, ndecomp_pools
+       do j = 1,nlevdecomp
+          do fc = 1,num_soilc
+             c = filter_soilc(fc)
+             this%m_decomp_cpools_to_fire_col(c,l) = &
+                  this%m_decomp_cpools_to_fire_col(c,l) + &
+                  this%m_decomp_cpools_to_fire_vr_col(c,j,l)*dzsoi_decomp(j)
           end do
        end do
     end do

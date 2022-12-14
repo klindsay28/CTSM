@@ -27,6 +27,7 @@ module CNFireBaseMod
   use CNVegCarbonStateType               , only : cnveg_carbonstate_type, spinup_factor_deadwood
   use CNVegCarbonFluxType                , only : cnveg_carbonflux_type
   use SoilBiogeochemCarbonFluxType       , only : soilbiogeochem_carbonflux_type
+  use SoilBiogeochemNitrogenFluxType     , only : soilbiogeochem_nitrogenflux_type
   use CNVegNitrogenStateType             , only : cnveg_nitrogenstate_type
   use CNVegNitrogenFluxType              , only : cnveg_nitrogenflux_type
   use SoilBiogeochemDecompCascadeConType , only : decomp_cascade_con
@@ -428,7 +429,7 @@ contains
       num_actfirec, filter_actfirec, num_actfirep, filter_actfirep,                        &
       dgvs_inst, cnveg_state_inst,                                                                      &
       cnveg_carbonstate_inst, cnveg_carbonflux_inst, cnveg_nitrogenstate_inst, cnveg_nitrogenflux_inst, &
-      soilbiogeochem_carbonflux_inst,                                       &
+      soilbiogeochem_carbonflux_inst, soilbiogeochem_nitrogenflux_inst, &
       leaf_prof_patch, froot_prof_patch, croot_prof_patch, stem_prof_patch, &
       totsomc_col, decomp_cpools_vr_col, decomp_npools_vr_col, somc_fire_col)
    !
@@ -464,7 +465,8 @@ contains
    integer                              , intent(out)   :: filter_actfirec(:)                      ! filter for soil columns
    type(dgvs_type)                      , intent(inout) :: dgvs_inst
    type(cnveg_state_type)               , intent(inout) :: cnveg_state_inst
-   type(soilbiogeochem_carbonflux_type) , intent(inout) :: soilbiogeochem_carbonflux_inst          ! only for matrix_decomp_fire_k: (gC/m3/step) VR deomp. C fire loss in matrix representation
+   type(soilbiogeochem_carbonflux_type) , intent(inout) :: soilbiogeochem_carbonflux_inst
+   type(soilbiogeochem_nitrogenflux_type),intent(inout) :: soilbiogeochem_nitrogenflux_inst
    type(cnveg_carbonstate_type)         , intent(inout) :: cnveg_carbonstate_inst
    type(cnveg_carbonflux_type)          , intent(inout) :: cnveg_carbonflux_inst
    type(cnveg_nitrogenstate_type)       , intent(in)    :: cnveg_nitrogenstate_inst
@@ -638,7 +640,7 @@ contains
          m_deadcrootc_xfer_to_litter_fire    => cnveg_carbonflux_inst%m_deadcrootc_xfer_to_litter_fire_patch      , & ! Output: [real(r8) (:)     ]                                                    
          m_gresp_storage_to_litter_fire      => cnveg_carbonflux_inst%m_gresp_storage_to_litter_fire_patch        , & ! Output: [real(r8) (:)     ]                                                    
          m_gresp_xfer_to_litter_fire         => cnveg_carbonflux_inst%m_gresp_xfer_to_litter_fire_patch           , & ! Output: [real(r8) (:)     ]                                                    
-         m_decomp_cpools_to_fire_vr          => cnveg_carbonflux_inst%m_decomp_cpools_to_fire_vr_col              , & ! Output: [real(r8) (:,:,:) ]  (gC/m3/s) VR decomp. C fire loss
+         m_decomp_cpools_to_fire_vr          => soilbiogeochem_carbonflux_inst%m_decomp_cpools_to_fire_vr_col     , & ! Output: [real(r8) (:,:,:) ]  (gC/m3/s) VR decomp. C fire loss
          m_c_to_litr_fire                    => cnveg_carbonflux_inst%m_c_to_litr_fire_col                        , & ! Output: [real(r8) (:,:,:) ]
          
          fire_mortality_n_to_cwdn            => cnveg_nitrogenflux_inst%fire_mortality_n_to_cwdn_col              , & ! Input:  [real(r8) (:,:)   ]  N flux fire mortality to CWD (gN/m3/s)
@@ -682,7 +684,7 @@ contains
          m_deadcrootn_storage_to_litter_fire => cnveg_nitrogenflux_inst%m_deadcrootn_storage_to_litter_fire_patch , & ! Output: [real(r8) (:)     ]                                                    
          m_deadcrootn_xfer_to_litter_fire    => cnveg_nitrogenflux_inst%m_deadcrootn_xfer_to_litter_fire_patch    , & ! Output: [real(r8) (:)     ]                                                    
          m_retransn_to_litter_fire           => cnveg_nitrogenflux_inst%m_retransn_to_litter_fire_patch           , & ! Output: [real(r8) (:)     ]                                                    
-         m_decomp_npools_to_fire_vr          => cnveg_nitrogenflux_inst%m_decomp_npools_to_fire_vr_col            , & ! Output: [real(r8) (:,:,:) ]  VR decomp. N fire loss (gN/m3/s)
+         m_decomp_npools_to_fire_vr          => soilbiogeochem_nitrogenflux_inst%m_decomp_npools_to_fire_vr_col   , & ! Output: [real(r8) (:,:,:) ]  VR decomp. N fire loss (gN/m3/s)
          m_n_to_litr_fire                    => cnveg_nitrogenflux_inst%m_n_to_litr_fire_col                        & ! Output: [real(r8) (:,:,:) ]
          )
 

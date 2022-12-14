@@ -119,7 +119,7 @@ contains
                do fc = 1,num_soilc
                   c = filter_soilc(fc)
                   cs_soil%decomp_cpools_vr_col(c,j,l) = cs_soil%decomp_cpools_vr_col(c,j,l) - &
-                    cf_veg%m_decomp_cpools_to_fire_vr_col(c,j,l) * dt
+                    cf_soil%m_decomp_cpools_to_fire_vr_col(c,j,l) * dt
                end do
             end do
          end do

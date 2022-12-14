@@ -185,20 +185,23 @@ contains
   end subroutine InitHistory
 
   !-----------------------------------------------------------------------
-  subroutine CNFireEmisUpdate(bounds, num_soilp, filter_soilp, cnveg_cf_inst, cnveg_cs_inst, fireemis_inst )
+  subroutine CNFireEmisUpdate(bounds, num_soilp, filter_soilp, cnveg_cf_inst, cnveg_cs_inst, &
+       soilbiogeochem_cf_inst, fireemis_inst )
 
-    use CNVegcarbonfluxType,  only : cnveg_carbonflux_type
-    use CNVegCarbonStateType, only : cnveg_carbonstate_type
-    use clm_varpar,           only : ndecomp_pools, nlevdecomp
-    use clm_varcon,           only : dzsoi_decomp
+    use CNVegcarbonfluxType,          only : cnveg_carbonflux_type
+    use CNVegCarbonStateType,         only : cnveg_carbonstate_type
+    use SoilBiogeochemCarbonFluxType, only : soilbiogeochem_carbonflux_type
+    use clm_varpar,                   only : ndecomp_pools, nlevdecomp
+    use clm_varcon,                   only : dzsoi_decomp
 
     !ARGUMENTS:
-    type(bounds_type),           intent(in)    :: bounds
-    integer,                     intent(in)    :: num_soilp       ! number of soil pfts in filter
-    integer,                     intent(in)    :: filter_soilp(:) ! filter for soil pfts
-    type(cnveg_carbonflux_type), intent(in)    :: cnveg_cf_inst
-    type(cnveg_carbonstate_type),intent(in)    :: cnveg_cs_inst
-    type(fireemis_type),         intent(inout) :: fireemis_inst
+    type(bounds_type),                    intent(in)    :: bounds
+    integer,                              intent(in)    :: num_soilp       ! number of soil pfts in filter
+    integer,                              intent(in)    :: filter_soilp(:) ! filter for soil pfts
+    type(cnveg_carbonflux_type),          intent(in)    :: cnveg_cf_inst
+    type(cnveg_carbonstate_type),         intent(in)    :: cnveg_cs_inst
+    type(soilbiogeochem_carbonflux_type), intent(in)    :: soilbiogeochem_cf_inst
+    type(fireemis_type),                  intent(inout) :: fireemis_inst
 
     !LOCAL VARIABLES:
     real(r8) :: fire_flux
@@ -251,7 +254,7 @@ contains
                do l = 1, ndecomp_pools
                   do j = 1, nlevdecomp
                      fire_flux_lf1 = fire_flux_lf1 + &
-                          cnveg_cf_inst%m_decomp_cpools_to_fire_vr_col(c,j,l)*dzsoi_decomp(j)
+                        soilbiogeochem_cf_inst%m_decomp_cpools_to_fire_vr_col(c,j,l)*dzsoi_decomp(j)
                   enddo
                end do
                fire_flux_lf = fire_flux_lf1*cnveg_cs_inst%totvegc_patch(p)/cnveg_cs_inst%totvegc_col(c)

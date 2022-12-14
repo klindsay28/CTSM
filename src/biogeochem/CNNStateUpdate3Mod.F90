@@ -135,7 +135,7 @@ contains
                do fc = 1,num_soilc
                   c = filter_soilc(fc)
                   ns_soil%decomp_npools_vr_col(c,j,l) = ns_soil%decomp_npools_vr_col(c,j,l) - &
-                    nf_veg%m_decomp_npools_to_fire_vr_col(c,j,l) * dt
+                    nf_soil%m_decomp_npools_to_fire_vr_col(c,j,l) * dt
                end do
             end do
          end do
